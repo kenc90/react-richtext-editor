@@ -43,6 +43,18 @@ const blockFormats = [
   { value: '<pre>', label: 'Code block' },
 ];
 
+type FormatSnapshot = {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strikeThrough: boolean;
+  subscript: boolean;
+  superscript: boolean;
+  color: string;
+  backgroundColor: string;
+  textAlign: string;
+};
+
 type IconName =
   | 'bold'
   | 'italic'
@@ -64,6 +76,7 @@ type IconName =
   | 'outdent'
   | 'link'
   | 'unlink'
+  | 'formatPainter'
   | 'undo'
   | 'redo';
 
@@ -88,6 +101,7 @@ const iconPaths: Record<IconName, string> = {
   outdent: 'M3 5h18 M9 10h12 M9 15h12 M3 20h18 M6 12l-3 3 3 3',
   link: 'M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7 M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7',
   unlink: 'M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7 M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7 M3 3l18 18',
+  formatPainter: '',
   undo: 'M9 14 4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-2',
   redo: 'm15 14 5-5-5-5 M20 9H10a6 6 0 0 0 0 12h2',
 };
@@ -104,12 +118,17 @@ function Icon({ name }: { name: IconName }) {
   return (
     <svg
       aria-hidden="true"
-      className="rwe__icon"
+      className={`rwe__icon${name === 'formatPainter' ? ' rwe__icon--format-painter' : ''}`}
       fill="none"
       focusable="false"
       viewBox="0 0 24 24"
     >
-      {iconPaths[name] && <path d={iconPaths[name]} />}
+      {name === 'formatPainter' ? (
+        <g fill="currentColor" stroke="none">
+          <path d="M21.05 1.07h1.14l.6.34.41.74v1.07l-.67 1.67-1.28 1.68-2.61 2.41-1.95 1.41 3.56 3.76-.07.33-1.61 1.61-.54 0-9.78-9.79-.07-.53 1.61-1.68.33-.07 3.76 3.56 1.74-2.35 2.08-2.21 1.67-1.28z" />
+          <path d="M7.64 6.97 17.3 16.56l-6.84 6.97-.81-.8.88-1.34-1.41.87-1.21-1.28 2.95-3.01 1.61-2.01-.74.46-4.22 4.23-1.28-1.41 2.15-2.82-2.61 2.49-1.88-1.88 1.67-2.21-2.07 1.67-1.21-1.07 2.55-3.15-2.89 2.75L.8 13.94z" />
+        </g>
+      ) : iconPaths[name] && <path d={iconPaths[name]} />}
       {iconText[name] && (
         <text
           className={`rwe__icon-text rwe__icon-text--${name}`}
@@ -152,8 +171,10 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
+  const copiedFormatRef = useRef<FormatSnapshot | null>(null);
   const [dialog, setDialog] = useState<'link' | 'table' | null>(null);
   const [isSourceEditing, setIsSourceEditing] = useState(false);
+  const [isFormatPainterActive, setIsFormatPainterActive] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [tableRows, setTableRows] = useState('3');
   const [tableColumns, setTableColumns] = useState('3');
@@ -201,6 +222,87 @@ export function RichTextEditor({
     document.execCommand(command, false, commandValue);
     emitChange();
     saveSelection();
+  };
+
+  const copyFormatting = () => {
+    const editor = editorRef.current;
+    restoreSelection();
+    const selection = window.getSelection();
+    if (!editor || !selection?.rangeCount) return;
+
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+
+    const selectedNode = range.startContainer;
+    const selectedElement = selectedNode.nodeType === Node.ELEMENT_NODE
+      ? selectedNode as HTMLElement
+      : selectedNode.parentElement;
+    const formatElement = selectedElement && editor.contains(selectedElement)
+      ? selectedElement
+      : editor;
+    const blockElement = formatElement.closest('p,h1,h2,h3,h4,h5,h6,blockquote,pre,li,div') ?? editor;
+    const computedStyle = window.getComputedStyle(formatElement);
+
+    copiedFormatRef.current = {
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      underline: document.queryCommandState('underline'),
+      strikeThrough: document.queryCommandState('strikeThrough'),
+      subscript: document.queryCommandState('subscript'),
+      superscript: document.queryCommandState('superscript'),
+      color: computedStyle.color,
+      backgroundColor: computedStyle.backgroundColor,
+      textAlign: window.getComputedStyle(blockElement).textAlign,
+    };
+    setIsFormatPainterActive(true);
+  };
+
+  const pasteFormatting = () => {
+    const editor = editorRef.current;
+    const format = copiedFormatRef.current;
+    const selection = window.getSelection();
+    if (!editor || !format || !selection?.rangeCount || selection.isCollapsed) return;
+    if (!editor.contains(selection.getRangeAt(0).commonAncestorContainer)) return;
+
+    editor.focus();
+    restoreSelection();
+    const inlineCommands: (keyof Pick<
+      FormatSnapshot,
+      'bold' | 'italic' | 'underline' | 'strikeThrough' | 'subscript' | 'superscript'
+    >)[] = ['bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript'];
+    for (const command of inlineCommands) {
+      if (document.queryCommandState(command) !== format[command]) {
+        document.execCommand(command);
+      }
+    }
+
+    document.execCommand('styleWithCSS', false, 'true');
+    document.execCommand('foreColor', false, format.color);
+    document.execCommand(
+      'hiliteColor',
+      false,
+      format.backgroundColor === 'rgba(0, 0, 0, 0)' ? 'transparent' : format.backgroundColor,
+    );
+
+    const alignmentCommands: Record<string, EditorCommand> = {
+      left: 'justifyLeft',
+      start: 'justifyLeft',
+      center: 'justifyCenter',
+      right: 'justifyRight',
+      end: 'justifyRight',
+      justify: 'justifyFull',
+    };
+    const alignmentCommand = alignmentCommands[format.textAlign];
+    if (alignmentCommand) document.execCommand(alignmentCommand);
+
+    emitChange();
+    saveSelection();
+    setIsFormatPainterActive(false);
+  };
+
+  const handleEditorSelection = () => {
+    saveSelection();
+    if (isFormatPainterActive) pasteFormatting();
   };
 
   const openLinkDialog = () => {
@@ -267,6 +369,8 @@ export function RichTextEditor({
     icon: IconName,
     onClick: () => void,
     shortcut?: string,
+    disabled = false,
+    pressed?: boolean,
   ) => (
     <button
       className="rwe__button"
@@ -274,7 +378,8 @@ export function RichTextEditor({
       type="button"
       aria-label={label}
       title={shortcut ? `${label} (${shortcut})` : label}
-      disabled={isSourceEditing && label !== 'Edit HTML' && label !== 'Visual editor'}
+      aria-pressed={pressed}
+      disabled={disabled || (isSourceEditing && label !== 'Edit HTML' && label !== 'Visual editor')}
       onMouseDown={(event) => {
         saveSelection();
         event.preventDefault();
@@ -360,10 +465,25 @@ export function RichTextEditor({
           {button('Undo', 'undo', () => runCommand('undo'), 'Ctrl+Z')}
           {button('Redo', 'redo', () => runCommand('redo'), 'Ctrl+Y')}
           {button(
+            'Format painter',
+            'formatPainter',
+            () => {
+              if (isFormatPainterActive) {
+                setIsFormatPainterActive(false);
+              } else {
+                copyFormatting();
+              }
+            },
+            undefined,
+            false,
+            isFormatPainterActive,
+          )}
+          {button(
             isSourceEditing ? 'Visual editor' : 'Edit HTML',
             'code',
             () => {
               setDialog(null);
+              setIsFormatPainterActive(false);
               setIsSourceEditing((current) => !current);
             },
           )}
@@ -446,8 +566,8 @@ export function RichTextEditor({
       />
       <div
         ref={editorRef}
-        className="rwe__content"
         hidden={isSourceEditing}
+        className={['rwe__content', isFormatPainterActive && 'rwe__content--format-painter'].filter(Boolean).join(' ')}
         contentEditable
         suppressContentEditableWarning
         role="textbox"
@@ -456,8 +576,8 @@ export function RichTextEditor({
         data-placeholder={placeholder}
         onInput={(event) => onChange(event.currentTarget.innerHTML)}
         onKeyDown={handleKeyDown}
-        onKeyUp={saveSelection}
-        onMouseUp={saveSelection}
+        onKeyUp={handleEditorSelection}
+        onMouseUp={handleEditorSelection}
         onBlur={saveSelection}
       />
     </div>

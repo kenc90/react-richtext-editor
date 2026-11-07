@@ -25,7 +25,7 @@ function Example() {
 
 The default styles are included and injected when the package is imported; no separate CSS import is required.
 
-`value` and `onChange` use an HTML string. Use **Edit HTML** in the toolbar to edit the source directly; switch back to the visual editor to see the rendered result. The toolbar supports headings, blockquotes, code blocks and inline code, bold, italic, underline, strikethrough, lists, links, tables, horizontal rules, alignment, indentation, text color, highlighting, undo/redo, and clear formatting. Markdown shortcuts are available for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) followed by a space.
+`value` and `onChange` use an HTML string. Use **Edit HTML** in the toolbar to edit the source directly; switch back to the visual editor to see the rendered result. To copy formatting, select the source text and click **Format painter**, then select the target text; the styling and alignment are applied to that selection. The toolbar also supports headings, blockquotes, code blocks and inline code, bold, italic, underline, strikethrough, lists, links, tables, horizontal rules, alignment, indentation, text color, highlighting, undo/redo, and clear formatting. Markdown shortcuts are available for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) followed by a space.
 
 The editor uses the browser's built-in `contentEditable` and editing commands; React is its only runtime dependency. Browser support for some built-in editing commands can vary. Images and server-side upload handling are not included. The component includes basic layout styles; override the `rwe` CSS classes or pass a `className` to customize it.
 

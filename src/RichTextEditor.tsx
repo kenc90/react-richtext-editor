@@ -4,10 +4,69 @@ import { normalizePastedHtml } from './paste';
 export interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
+  features?: RichTextEditorFeatures;
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
 }
+
+export interface RichTextEditorFeatures {
+  blockFormat?: boolean;
+  fontFamily?: boolean;
+  fontSize?: boolean;
+  lineSpacing?: boolean;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikeThrough?: boolean;
+  subscript?: boolean;
+  superscript?: boolean;
+  inlineCode?: boolean;
+  clearFormatting?: boolean;
+  bulletedList?: boolean;
+  numberedList?: boolean;
+  table?: boolean;
+  image?: boolean;
+  horizontalRule?: boolean;
+  textAlignment?: boolean;
+  indentation?: boolean;
+  textColor?: boolean;
+  highlight?: boolean;
+  link?: boolean;
+  undo?: boolean;
+  redo?: boolean;
+  formatPainter?: boolean;
+  htmlSource?: boolean;
+}
+
+const defaultFeatures: Required<RichTextEditorFeatures> = {
+  blockFormat: true,
+  fontFamily: true,
+  fontSize: true,
+  lineSpacing: true,
+  bold: true,
+  italic: true,
+  underline: true,
+  strikeThrough: true,
+  subscript: true,
+  superscript: true,
+  inlineCode: true,
+  clearFormatting: true,
+  bulletedList: true,
+  numberedList: true,
+  table: true,
+  image: true,
+  horizontalRule: true,
+  textAlignment: true,
+  indentation: true,
+  textColor: true,
+  highlight: true,
+  link: true,
+  undo: true,
+  redo: true,
+  formatPainter: true,
+  htmlSource: true,
+};
 
 type EditorCommand =
   | 'bold'
@@ -258,10 +317,12 @@ function isSimpleTable(table: HTMLTableElement) {
 export function RichTextEditor({
   value,
   onChange,
+  features: featureOverrides,
   placeholder = 'Start writing…',
   ariaLabel = 'Rich text editor',
   className,
 }: RichTextEditorProps) {
+  const features = { ...defaultFeatures, ...featureOverrides };
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const historyRef = useRef({
@@ -407,6 +468,31 @@ export function RichTextEditor({
       syncToolbarFormat();
     }
   }, [value]);
+
+  useEffect(() => {
+    if (
+      (dialog === 'link' && !features.link)
+      || (dialog === 'image' && !features.image)
+      || ((dialog === 'table' || dialog === 'table-tools') && !features.table)
+    ) {
+      setDialog(null);
+    }
+    if (isSourceEditing && !features.htmlSource) setIsSourceEditing(false);
+    if (!features.image) {
+      setSelectedImage(null);
+      setImageFrame(null);
+    }
+    if (!features.table) setSelectedCell(null);
+    if (!features.formatPainter) setIsFormatPainterActive(false);
+  }, [
+    dialog,
+    isSourceEditing,
+    features.formatPainter,
+    features.htmlSource,
+    features.image,
+    features.link,
+    features.table,
+  ]);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -1141,7 +1227,7 @@ export function RichTextEditor({
   };
 
   const handleEditorPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || !(event.target instanceof Element)) return;
+    if (!features.table || event.button !== 0 || !(event.target instanceof Element)) return;
     const cell = event.target.closest<HTMLTableCellElement>('td,th');
     const table = cell?.closest('table');
     if (!cell || !table || !isSimpleTable(table)) return;
@@ -1165,6 +1251,11 @@ export function RichTextEditor({
   };
 
   const handleEditorPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!features.table) {
+      event.currentTarget.style.cursor = '';
+      return;
+    }
+
     const resize = columnResizeRef.current;
     if (!resize) {
       const target = event.target;
@@ -1221,14 +1312,14 @@ export function RichTextEditor({
 
     const image = event.target.closest('img');
     if (image instanceof HTMLImageElement && editorRef.current?.contains(image)) {
-      setSelectedImage(image);
+      setSelectedImage(features.image ? image : null);
       setSelectedCell(null);
       return;
     }
 
     const cell = event.target.closest('td,th');
     if (cell instanceof HTMLTableCellElement && editorRef.current?.contains(cell)) {
-      setSelectedCell(cell);
+      setSelectedCell(features.table ? cell : null);
       setSelectedImage(null);
       return;
     }
@@ -1255,19 +1346,31 @@ export function RichTextEditor({
     const key = event.key.toLowerCase();
     if ((event.ctrlKey || event.metaKey) && key === 'z') {
       event.preventDefault();
-      if (event.shiftKey) redoChange();
-      else undoChange();
+      if (event.shiftKey) {
+        if (features.redo) redoChange();
+      } else if (features.undo) {
+        undoChange();
+      }
       return;
     }
     if ((event.ctrlKey || event.metaKey) && key === 'y') {
       event.preventDefault();
-      redoChange();
+      if (features.redo) redoChange();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(key)) {
+      event.preventDefault();
+      if (key === 'b' && features.bold) runCommand('bold');
+      if (key === 'i' && features.italic) runCommand('italic');
+      if (key === 'u' && features.underline) runCommand('underline');
       return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
-      saveSelection();
-      openLinkDialog();
+      if (features.link) {
+        saveSelection();
+        openLinkDialog();
+      }
       return;
     }
 
@@ -1293,6 +1396,9 @@ export function RichTextEditor({
             : null;
 
     if (!shortcut) return;
+    if (shortcut.command === 'formatBlock' && !features.blockFormat) return;
+    if (shortcut.command === 'insertUnorderedList' && !features.bulletedList) return;
+    if (shortcut.command === 'insertOrderedList' && !features.numberedList) return;
     event.preventDefault();
     document.execCommand('delete');
     document.execCommand(shortcut.command, false, shortcut.value);
@@ -1343,6 +1449,7 @@ export function RichTextEditor({
   return (
     <div className={['rwe', className].filter(Boolean).join(' ')}>
       <div className="rwe__toolbar" role="toolbar" aria-label="Text formatting">
+        {features.blockFormat && (
         <div className="rwe__group">
           <select
             className="rwe__select"
@@ -1360,7 +1467,10 @@ export function RichTextEditor({
             ))}
           </select>
         </div>
+        )}
+        {(features.fontFamily || features.fontSize || features.lineSpacing) && (
         <div className="rwe__group">
+          {features.fontFamily && (
           <select
             className="rwe__select"
             aria-label="Font family"
@@ -1379,6 +1489,9 @@ export function RichTextEditor({
               <option key={font} value={font}>{label}</option>
             ))}
           </select>
+          )}
+          {features.fontSize && (
+          <>
           <select
             className="rwe__select"
             aria-label="Font size"
@@ -1421,6 +1534,10 @@ export function RichTextEditor({
               setCustomFontSizeDraft(null);
             }}
           />
+          </>
+          )}
+          {features.lineSpacing && (
+          <>
           <select
             className="rwe__select"
             aria-label="Line spacing"
@@ -1463,40 +1580,52 @@ export function RichTextEditor({
               setCustomLineSpacingDraft(null);
             }}
           />
+          </>
+          )}
         </div>
+        )}
+        {(features.bold || features.italic || features.underline || features.strikeThrough
+          || features.subscript || features.superscript || features.inlineCode || features.clearFormatting) && (
         <div className="rwe__group">
-          {button('Bold', 'bold', () => runCommand('bold'), 'Ctrl+B', false, toolbarFormat.bold)}
-          {button('Italic', 'italic', () => runCommand('italic'), 'Ctrl+I', false, toolbarFormat.italic)}
-          {button('Underline', 'underline', () => runCommand('underline'), undefined, false, toolbarFormat.underline)}
-          {button('Strikethrough', 'strike', () => runCommand('strikeThrough'), undefined, false, toolbarFormat.strikeThrough)}
-          {button('Subscript', 'subscript', () => runCommand('subscript'), undefined, false, toolbarFormat.subscript)}
-          {button('Superscript', 'superscript', () => runCommand('superscript'), undefined, false, toolbarFormat.superscript)}
-          {button('Inline code', 'code', insertInlineCode)}
-          {button('Clear formatting', 'clear', () => runCommand('removeFormat'))}
+          {features.bold && button('Bold', 'bold', () => runCommand('bold'), 'Ctrl+B', false, toolbarFormat.bold)}
+          {features.italic && button('Italic', 'italic', () => runCommand('italic'), 'Ctrl+I', false, toolbarFormat.italic)}
+          {features.underline && button('Underline', 'underline', () => runCommand('underline'), undefined, false, toolbarFormat.underline)}
+          {features.strikeThrough && button('Strikethrough', 'strike', () => runCommand('strikeThrough'), undefined, false, toolbarFormat.strikeThrough)}
+          {features.subscript && button('Subscript', 'subscript', () => runCommand('subscript'), undefined, false, toolbarFormat.subscript)}
+          {features.superscript && button('Superscript', 'superscript', () => runCommand('superscript'), undefined, false, toolbarFormat.superscript)}
+          {features.inlineCode && button('Inline code', 'code', insertInlineCode)}
+          {features.clearFormatting && button('Clear formatting', 'clear', () => runCommand('removeFormat'))}
         </div>
+        )}
+        {(features.bulletedList || features.numberedList || features.table || features.image || features.horizontalRule) && (
         <div className="rwe__group">
-          {button('Bulleted list', 'bulletedList', () => runCommand('insertUnorderedList'), undefined, false, toolbarFormat.bulletedList)}
-          {button('Numbered list', 'numberedList', () => runCommand('insertOrderedList'), undefined, false, toolbarFormat.numberedList)}
-          {button('Insert table', 'table', (event) => openDialog('table', event.currentTarget))}
-          {button('Insert image', 'image', (event) => openImageDialog(event.currentTarget))}
-          {button('Horizontal rule', 'rule', () => runCommand('insertHorizontalRule'))}
+          {features.bulletedList && button('Bulleted list', 'bulletedList', () => runCommand('insertUnorderedList'), undefined, false, toolbarFormat.bulletedList)}
+          {features.numberedList && button('Numbered list', 'numberedList', () => runCommand('insertOrderedList'), undefined, false, toolbarFormat.numberedList)}
+          {features.table && button('Insert table', 'table', (event) => openDialog('table', event.currentTarget))}
+          {features.image && button('Insert image', 'image', (event) => openImageDialog(event.currentTarget))}
+          {features.horizontalRule && button('Horizontal rule', 'rule', () => runCommand('insertHorizontalRule'))}
         </div>
+        )}
+        {(features.textAlignment || features.indentation) && (
         <div className="rwe__group">
-          {button('Align left', 'alignLeft', () => runCommand('justifyLeft'), undefined, false, ['left', 'start'].includes(toolbarFormat.textAlign))}
-          {button('Align center', 'alignCenter', () => runCommand('justifyCenter'), undefined, false, toolbarFormat.textAlign === 'center')}
-          {button('Align right', 'alignRight', () => runCommand('justifyRight'), undefined, false, ['right', 'end'].includes(toolbarFormat.textAlign))}
-          {button('Justify', 'justify', () => runCommand('justifyFull'), undefined, false, toolbarFormat.textAlign === 'justify')}
-          {button('Decrease indent', 'outdent', () => runCommand('outdent'))}
-          {button('Increase indent', 'indent', () => runCommand('indent'))}
+          {features.textAlignment && button('Align left', 'alignLeft', () => runCommand('justifyLeft'), undefined, false, ['left', 'start'].includes(toolbarFormat.textAlign))}
+          {features.textAlignment && button('Align center', 'alignCenter', () => runCommand('justifyCenter'), undefined, false, toolbarFormat.textAlign === 'center')}
+          {features.textAlignment && button('Align right', 'alignRight', () => runCommand('justifyRight'), undefined, false, ['right', 'end'].includes(toolbarFormat.textAlign))}
+          {features.textAlignment && button('Justify', 'justify', () => runCommand('justifyFull'), undefined, false, toolbarFormat.textAlign === 'justify')}
+          {features.indentation && button('Decrease indent', 'outdent', () => runCommand('outdent'))}
+          {features.indentation && button('Increase indent', 'indent', () => runCommand('indent'))}
         </div>
-        {selectedImage && (
+        )}
+        {features.image && selectedImage && (
           <div className="rwe__group" aria-label="Image alignment">
             {button('Align image left', 'alignLeft', () => alignSelectedImage('left'))}
             {button('Center image', 'alignCenter', () => alignSelectedImage('center'))}
             {button('Align image right', 'alignRight', () => alignSelectedImage('right'))}
           </div>
         )}
+        {(features.textColor || features.highlight) && (
         <div className="rwe__group">
+          {features.textColor && (
           <label className="rwe__color">
             Text
             <input
@@ -1508,6 +1637,8 @@ export function RichTextEditor({
               onChange={(event) => runCommand('foreColor', event.target.value)}
             />
           </label>
+          )}
+          {features.highlight && (
           <label className="rwe__color">
             Highlight
             <input
@@ -1519,13 +1650,16 @@ export function RichTextEditor({
               onChange={(event) => runCommand('hiliteColor', event.target.value)}
             />
           </label>
+          )}
         </div>
+        )}
+        {(features.link || features.undo || features.redo || features.formatPainter || features.htmlSource) && (
         <div className="rwe__group">
-          {button('Add link', 'link', (event) => openLinkDialog(event.currentTarget), 'Ctrl+K')}
-          {button('Remove link', 'unlink', () => runCommand('unlink'))}
-          {button('Undo', 'undo', () => undoChange(), 'Ctrl+Z')}
-          {button('Redo', 'redo', () => redoChange(), 'Ctrl+Y')}
-          {button(
+          {features.link && button('Add link', 'link', (event) => openLinkDialog(event.currentTarget), 'Ctrl+K')}
+          {features.link && button('Remove link', 'unlink', () => runCommand('unlink'))}
+          {features.undo && button('Undo', 'undo', () => undoChange(), 'Ctrl+Z')}
+          {features.redo && button('Redo', 'redo', () => redoChange(), 'Ctrl+Y')}
+          {features.formatPainter && button(
             'Format painter',
             'formatPainter',
             () => {
@@ -1539,7 +1673,7 @@ export function RichTextEditor({
             false,
             isFormatPainterActive,
           )}
-          {button(
+          {features.htmlSource && button(
             isSourceEditing ? 'Visual editor' : 'Edit HTML',
             'code',
             () => {
@@ -1549,7 +1683,8 @@ export function RichTextEditor({
             },
           )}
         </div>
-        {selectedTable && (
+        )}
+        {features.table && selectedTable && (
           <div className="rwe__group">
             {button('Table options', 'table', (event) => openDialog('table-tools', event.currentTarget))}
           </div>

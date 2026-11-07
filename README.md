@@ -27,6 +27,20 @@ function Example() {
 
 The default styles are included and injected when the package is imported; no separate CSS import is required.
 
+## Choosing features
+
+All editor features are enabled by default. Pass `features` to hide controls and disable their associated keyboard and Markdown shortcuts; unspecified options remain enabled:
+
+```tsx
+<RichTextEditor
+  value={html}
+  onChange={setHtml}
+  features={{ image: false, table: false, htmlSource: false }}
+/>
+```
+
+`RichTextEditorFeatures` is exported for TypeScript consumers. Available options are `blockFormat`, `fontFamily`, `fontSize`, `lineSpacing`, `bold`, `italic`, `underline`, `strikeThrough`, `subscript`, `superscript`, `inlineCode`, `clearFormatting`, `bulletedList`, `numberedList`, `table`, `image`, `horizontalRule`, `textAlignment`, `indentation`, `textColor`, `highlight`, `link`, `undo`, `redo`, `formatPainter`, and `htmlSource`.
+
 ## Restyling
 
 Pass `className` to add a class to the editor's outer element, then override the `rwe__...` classes from your own stylesheet. Scoping overrides under your class keeps them limited to that editor. For example:

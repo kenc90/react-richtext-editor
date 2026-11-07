@@ -9,4 +9,4 @@ if (typeof document !== 'undefined' && !document.getElementById(styleId)) {
 }
 
 export { RichTextEditor } from './RichTextEditor';
-export type { RichTextEditorProps } from './RichTextEditor';
+export type { RichTextEditorFeatures, RichTextEditorProps } from './RichTextEditor';

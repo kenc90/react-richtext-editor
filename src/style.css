@@ -159,6 +159,28 @@
   outline: none;
 }
 
+.rwe__source {
+  box-sizing: border-box;
+  border: 0;
+  color: inherit;
+  display: block;
+  font: 0.875rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  min-height: 10rem;
+  outline: none;
+  padding: 0.75rem;
+  resize: vertical;
+  width: 100%;
+}
+
+.rwe__source[hidden] {
+  display: none;
+}
+
+.rwe__source:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
 .rwe__content:empty::before {
   color: #94a3b8;
   content: attr(data-placeholder);

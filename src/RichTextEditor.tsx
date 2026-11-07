@@ -153,6 +153,7 @@ export function RichTextEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const [dialog, setDialog] = useState<'link' | 'table' | null>(null);
+  const [isSourceEditing, setIsSourceEditing] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [tableRows, setTableRows] = useState('3');
   const [tableColumns, setTableColumns] = useState('3');
@@ -273,6 +274,7 @@ export function RichTextEditor({
       type="button"
       aria-label={label}
       title={shortcut ? `${label} (${shortcut})` : label}
+      disabled={isSourceEditing && label !== 'Edit HTML' && label !== 'Visual editor'}
       onMouseDown={(event) => {
         saveSelection();
         event.preventDefault();
@@ -291,6 +293,7 @@ export function RichTextEditor({
             className="rwe__select"
             aria-label="Block format"
             defaultValue=""
+            disabled={isSourceEditing}
             onMouseDown={saveSelection}
             onChange={(event) => {
               if (event.target.value) runCommand('formatBlock', event.target.value);
@@ -334,6 +337,7 @@ export function RichTextEditor({
               aria-label="Text color"
               type="color"
               defaultValue="#0f172a"
+              disabled={isSourceEditing}
               onMouseDown={saveSelection}
               onChange={(event) => runCommand('foreColor', event.target.value)}
             />
@@ -344,6 +348,7 @@ export function RichTextEditor({
               aria-label="Highlight color"
               type="color"
               defaultValue="#fff176"
+              disabled={isSourceEditing}
               onMouseDown={saveSelection}
               onChange={(event) => runCommand('hiliteColor', event.target.value)}
             />
@@ -354,6 +359,14 @@ export function RichTextEditor({
           {button('Remove link', 'unlink', () => runCommand('unlink'))}
           {button('Undo', 'undo', () => runCommand('undo'), 'Ctrl+Z')}
           {button('Redo', 'redo', () => runCommand('redo'), 'Ctrl+Y')}
+          {button(
+            isSourceEditing ? 'Visual editor' : 'Edit HTML',
+            'code',
+            () => {
+              setDialog(null);
+              setIsSourceEditing((current) => !current);
+            },
+          )}
         </div>
       </div>
       {dialog === 'link' && (
@@ -423,9 +436,18 @@ export function RichTextEditor({
           </div>
         </form>
       )}
+      <textarea
+        className="rwe__source"
+        aria-label="HTML source"
+        hidden={!isSourceEditing}
+        spellCheck={false}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
       <div
         ref={editorRef}
         className="rwe__content"
+        hidden={isSourceEditing}
         contentEditable
         suppressContentEditableWarning
         role="textbox"

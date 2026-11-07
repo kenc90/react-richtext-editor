@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { normalizePastedHtml } from './paste';
 
 export interface RichTextEditorProps {
   value: string;
@@ -43,6 +44,31 @@ const blockFormats = [
   { value: '<pre>', label: 'Code block' },
 ];
 
+const fontFamilies = [
+  { value: 'Arial', label: 'Arial' },
+  { value: 'Georgia', label: 'Georgia' },
+  { value: 'Times New Roman', label: 'Times New Roman' },
+  { value: 'Courier New', label: 'Courier New' },
+  { value: 'Verdana', label: 'Verdana' },
+];
+
+const fontSizes = [
+  { value: '10px', label: '10 px' },
+  { value: '13px', label: '13 px' },
+  { value: '16px', label: '16 px' },
+  { value: '18px', label: '18 px' },
+  { value: '24px', label: '24 px' },
+  { value: '32px', label: '32 px' },
+  { value: '48px', label: '48 px' },
+];
+
+const lineSpacings = [
+  { value: '1', label: 'Single' },
+  { value: '1.15', label: '1.15' },
+  { value: '1.5', label: '1.5' },
+  { value: '2', label: 'Double' },
+];
+
 type FormatSnapshot = {
   bold: boolean;
   italic: boolean;
@@ -55,7 +81,16 @@ type FormatSnapshot = {
   textAlign: string;
 };
 
-type DialogType = 'link' | 'image' | 'table';
+type DialogType = 'link' | 'image' | 'table' | 'table-tools';
+type ImageFrame = { top: number; left: number; width: number; height: number };
+type ImageResizeStart = { image: HTMLImageElement; pointerX: number; width: number };
+type ColumnResizeStart = {
+  table: HTMLTableElement;
+  columnIndex: number;
+  pointerX: number;
+  leftWidth: number;
+  rightWidth: number;
+};
 
 type IconName =
   | 'bold'
@@ -163,6 +198,15 @@ function escapeHtml(value: string) {
   });
 }
 
+function isSimpleTable(table: HTMLTableElement) {
+  const rows = Array.from(table.rows);
+  const columnCount = rows[0]?.cells.length ?? 0;
+  return columnCount > 0 && rows.every((row) => (
+    row.cells.length === columnCount
+    && Array.from(row.cells).every((cell) => cell.colSpan === 1 && cell.rowSpan === 1)
+  ));
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -173,12 +217,18 @@ export function RichTextEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const copiedFormatRef = useRef<FormatSnapshot | null>(null);
+  const pendingInlineStyleRef = useRef<HTMLSpanElement | null>(null);
   const dialogRef = useRef<HTMLFormElement>(null);
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
+  const imageResizeRef = useRef<ImageResizeStart | null>(null);
+  const columnResizeRef = useRef<ColumnResizeStart | null>(null);
   const [dialog, setDialog] = useState<DialogType | null>(null);
   const [dialogPosition, setDialogPosition] = useState({ top: 0, left: 0 });
   const [isSourceEditing, setIsSourceEditing] = useState(false);
   const [isFormatPainterActive, setIsFormatPainterActive] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [imageFrame, setImageFrame] = useState<ImageFrame | null>(null);
+  const [selectedCell, setSelectedCell] = useState<HTMLTableCellElement | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
@@ -186,12 +236,66 @@ export function RichTextEditor({
   const [tableRows, setTableRows] = useState('3');
   const [tableColumns, setTableColumns] = useState('3');
 
+  const getImageFrame = (image: HTMLImageElement): ImageFrame | null => {
+    const container = editorRef.current?.parentElement;
+    if (!container || !container.contains(image)) return null;
+
+    const imageRect = image.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    return {
+      top: imageRect.top - containerRect.top - container.clientTop + container.scrollTop,
+      left: imageRect.left - containerRect.left - container.clientLeft + container.scrollLeft,
+      width: imageRect.width,
+      height: imageRect.height,
+    };
+  };
+
+  const getImageMaxWidth = () => {
+    const editor = editorRef.current;
+    if (!editor) return 32;
+    const styles = window.getComputedStyle(editor);
+    return Math.max(
+      32,
+      editor.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight),
+    );
+  };
+
   useEffect(() => {
     const editor = editorRef.current;
     if (editor && editor.innerHTML !== value) {
       editor.innerHTML = value;
+      selectionRef.current = null;
+      pendingInlineStyleRef.current = null;
+      setSelectedImage(null);
+      setImageFrame(null);
+      setSelectedCell(null);
     }
   }, [value]);
+
+  useEffect(() => {
+    if (!selectedImage) {
+      setImageFrame(null);
+      return;
+    }
+
+    const updateFrame = () => {
+      const frame = getImageFrame(selectedImage);
+      if (!frame) {
+        setSelectedImage(null);
+        setImageFrame(null);
+        return;
+      }
+      setImageFrame(frame);
+    };
+
+    updateFrame();
+    window.addEventListener('resize', updateFrame);
+    window.addEventListener('scroll', updateFrame, true);
+    return () => {
+      window.removeEventListener('resize', updateFrame);
+      window.removeEventListener('scroll', updateFrame, true);
+    };
+  }, [selectedImage]);
 
   useEffect(() => {
     if (!dialog) return;
@@ -241,12 +345,191 @@ export function RichTextEditor({
 
     editor.focus();
     restoreSelection();
-    if (command === 'foreColor' || command === 'hiliteColor') {
+    if (
+      command === 'foreColor'
+      || command === 'hiliteColor'
+    ) {
       document.execCommand('styleWithCSS', false, 'true');
     }
     document.execCommand(command, false, commandValue);
+    clearPendingInlineStyle();
     emitChange();
     saveSelection();
+  };
+
+  const clearPendingInlineStyle = () => {
+    const marker = pendingInlineStyleRef.current;
+    if (!marker) return;
+
+    const walker = document.createTreeWalker(marker, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const markerIndex = node.textContent?.indexOf('\u200B') ?? -1;
+      if (markerIndex >= 0) {
+        node.textContent = `${node.textContent?.slice(0, markerIndex) ?? ''}${node.textContent?.slice(markerIndex + 1) ?? ''}`;
+        break;
+      }
+      node = walker.nextNode();
+    }
+
+    if (!marker.textContent) marker.remove();
+    pendingInlineStyleRef.current = null;
+  };
+
+  const applyInlineStyle = (property: 'fontFamily' | 'fontSize', value: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+    restoreSelection();
+    clearPendingInlineStyle();
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+
+    if (range.collapsed) {
+      const marker = document.createElement('span');
+      marker.style[property] = value;
+      marker.append(document.createTextNode('\u200B'));
+      range.insertNode(marker);
+      const markerText = marker.firstChild;
+      if (!(markerText instanceof Text)) {
+        marker.remove();
+        return;
+      }
+      range.setStart(markerText, 1);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      selectionRef.current = range.cloneRange();
+      pendingInlineStyleRef.current = marker;
+      return;
+    }
+
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    const segments: Array<{ node: Text; start: number; end: number }> = [];
+    let node = walker.nextNode() as Text | null;
+    while (node) {
+      if (range.intersectsNode(node)) {
+        const start = range.startContainer === node ? range.startOffset : 0;
+        const end = range.endContainer === node ? range.endOffset : node.length;
+        if (end > start) segments.push({ node, start, end });
+      }
+      node = walker.nextNode() as Text | null;
+    }
+
+    const spans: HTMLSpanElement[] = [];
+    for (const segment of segments) {
+      if (segment.end < segment.node.length) segment.node.splitText(segment.end);
+      const selectedText = segment.start ? segment.node.splitText(segment.start) : segment.node;
+      const span = document.createElement('span');
+      span.style[property] = value;
+      selectedText.parentNode?.insertBefore(span, selectedText);
+      span.append(selectedText);
+      spans.push(span);
+    }
+
+    if (!spans.length) return;
+    const updatedRange = document.createRange();
+    updatedRange.setStartBefore(spans[0]);
+    updatedRange.setEndAfter(spans[spans.length - 1]);
+    selection.removeAllRanges();
+    selection.addRange(updatedRange);
+    selectionRef.current = updatedRange.cloneRange();
+    emitChange();
+  };
+
+  const applyLineSpacing = (lineHeight: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+    restoreSelection();
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const blocks = Array.from(editor.querySelectorAll<HTMLElement>(
+      'p,h1,h2,h3,h4,h5,h6,blockquote,pre,li,div',
+    ));
+    const selectedBlocks = range && editor.contains(range.commonAncestorContainer)
+      ? blocks.filter((block) => range.intersectsNode(block))
+      : [];
+
+    if (selectedBlocks.length) {
+      selectedBlocks.forEach((block) => {
+        block.style.lineHeight = lineHeight;
+      });
+    } else {
+      const selectedElement = range?.startContainer.nodeType === Node.ELEMENT_NODE
+        ? range.startContainer as HTMLElement
+        : range?.startContainer.parentElement;
+      const block = selectedElement?.closest<HTMLElement>(
+        'p,h1,h2,h3,h4,h5,h6,blockquote,pre,li,div',
+      );
+      (block ?? editor).style.lineHeight = lineHeight;
+    }
+
+    clearPendingInlineStyle();
+    emitChange();
+    saveSelection();
+  };
+
+  const insertFragmentAtSelection = (fragment: DocumentFragment) => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection) return;
+
+    const currentRange = selection.rangeCount ? selection.getRangeAt(0) : null;
+    const savedRange = selectionRef.current;
+    const range = currentRange && editor.contains(currentRange.commonAncestorContainer)
+      ? currentRange.cloneRange()
+      : savedRange && editor.contains(savedRange.commonAncestorContainer)
+        ? savedRange.cloneRange()
+        : document.createRange();
+
+    if (
+      (!currentRange || !editor.contains(currentRange.commonAncestorContainer))
+      && (!savedRange || !editor.contains(savedRange.commonAncestorContainer))
+    ) {
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+
+    editor.focus();
+    range.deleteContents();
+    const lastNode = fragment.lastChild;
+    range.insertNode(fragment);
+    clearPendingInlineStyle();
+    if (lastNode) range.setStartAfter(lastNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    emitChange();
+    saveSelection();
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const html = event.clipboardData.getData('text/html');
+    if (!html) return;
+
+    event.preventDefault();
+    const sanitizedHtml = normalizePastedHtml(html);
+    const template = document.createElement('template');
+    template.innerHTML = sanitizedHtml;
+    let fragment = template.content;
+
+    if (!fragment.childNodes.length) {
+      const plainText = event.clipboardData.getData('text/plain');
+      if (!plainText) return;
+
+      fragment = document.createDocumentFragment();
+      plainText.split(/\r\n?|\n/).forEach((line, index) => {
+        if (index) fragment.append(document.createElement('br'));
+        fragment.append(document.createTextNode(line));
+      });
+    }
+
+    insertFragmentAtSelection(fragment);
   };
 
   const copyFormatting = () => {
@@ -390,6 +673,8 @@ export function RichTextEditor({
       'insertHTML',
       `<img src="${escapeHtml(url.href)}" alt="${escapeHtml(imageAlt.trim())}">`,
     );
+    setSelectedImage(null);
+    setSelectedCell(null);
     setDialog(null);
   };
 
@@ -399,7 +684,258 @@ export function RichTextEditor({
       `<tr>${'<td><br></td>'.repeat(columns)}</tr>`
     )).join('');
     runCommand('insertHTML', `<table><thead>${header}</thead><tbody>${body}</tbody></table><p><br></p>`);
+    setSelectedImage(null);
+    setSelectedCell(null);
     setDialog(null);
+  };
+
+  const focusTableCell = (cell: HTMLTableCellElement) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    selectionRef.current = range.cloneRange();
+    setSelectedCell(cell);
+    setSelectedImage(null);
+  };
+
+  const insertTableRow = (position: 'above' | 'below') => {
+    if (!selectedCell) return;
+    const table = selectedCell.closest('table');
+    const row = selectedCell.closest('tr');
+    if (!table || !row) return;
+
+    const newRow = document.createElement('tr');
+    const count = table.rows[0]?.cells.length ?? 0;
+    for (let index = 0; index < count; index += 1) {
+      const currentCell = row.cells.item(index);
+      const newCell = document.createElement(currentCell?.tagName.toLowerCase() === 'th' ? 'th' : 'td');
+      newCell.innerHTML = '<br>';
+      newRow.append(newCell);
+    }
+
+    if (position === 'above') row.before(newRow);
+    else row.after(newRow);
+    focusTableCell(newRow.cells.item(selectedCell.cellIndex) ?? newRow.cells[0]);
+    emitChange();
+  };
+
+  const removeTableRow = () => {
+    if (!selectedCell) return;
+    const table = selectedCell.closest('table');
+    const row = selectedCell.closest('tr');
+    if (!table || !row || table.rows.length <= 1) return;
+
+    const rowIndex = row.rowIndex;
+    const columnIndex = selectedCell.cellIndex;
+    row.remove();
+    const nextRow = table.rows[Math.min(rowIndex, table.rows.length - 1)];
+    const nextCell = nextRow.cells.item(Math.min(columnIndex, nextRow.cells.length - 1));
+    if (nextCell) focusTableCell(nextCell);
+    emitChange();
+  };
+
+  const insertTableColumn = (position: 'before' | 'after') => {
+    if (!selectedCell) return;
+    const table = selectedCell.closest('table');
+    if (!table || !isSimpleTable(table)) return;
+
+    const row = selectedCell.closest('tr');
+    const columnIndex = selectedCell.cellIndex + (position === 'after' ? 1 : 0);
+    for (const row of Array.from(table.rows)) {
+      const referenceCell = row.cells.item(columnIndex);
+      const existingCell = row.cells.item(Math.min(columnIndex, row.cells.length - 1));
+      const newCell = document.createElement(existingCell?.tagName.toLowerCase() === 'th' ? 'th' : 'td');
+      newCell.innerHTML = '<br>';
+      if (referenceCell) row.insertBefore(newCell, referenceCell);
+      else row.append(newCell);
+    }
+
+    const insertedCell = row?.cells.item(columnIndex) ?? table.rows[0]?.cells.item(columnIndex);
+    if (insertedCell) focusTableCell(insertedCell);
+    emitChange();
+  };
+
+  const removeTableColumn = () => {
+    if (!selectedCell) return;
+    const table = selectedCell.closest('table');
+    if (!table || !isSimpleTable(table) || table.rows[0].cells.length <= 1) return;
+
+    const columnIndex = selectedCell.cellIndex;
+    const row = selectedCell.closest('tr');
+    for (const row of Array.from(table.rows)) row.cells.item(columnIndex)?.remove();
+    const currentRow = row ?? table.rows[0];
+    const nextCell = currentRow?.cells.item(Math.min(columnIndex, (currentRow.cells.length ?? 1) - 1));
+    if (nextCell) focusTableCell(nextCell);
+    emitChange();
+  };
+
+  const deleteTable = () => {
+    const table = selectedCell?.closest('table');
+    if (!table) return;
+    table.remove();
+    setSelectedCell(null);
+    setDialog(null);
+    emitChange();
+  };
+
+  const alignSelectedImage = (alignment: 'left' | 'center' | 'right') => {
+    if (!selectedImage || !editorRef.current?.contains(selectedImage)) return;
+    selectedImage.style.display = 'block';
+    selectedImage.style.marginLeft = alignment === 'left' ? '0' : 'auto';
+    selectedImage.style.marginRight = alignment === 'right' ? '0' : 'auto';
+    setImageFrame(getImageFrame(selectedImage));
+    emitChange();
+  };
+
+  const startImageResize = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!selectedImage) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    imageResizeRef.current = {
+      image: selectedImage,
+      pointerX: event.clientX,
+      width: selectedImage.getBoundingClientRect().width,
+    };
+  };
+
+  const moveImageResize = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const resize = imageResizeRef.current;
+    const editor = editorRef.current;
+    if (!resize || !editor) return;
+
+    event.preventDefault();
+    const maxWidth = getImageMaxWidth();
+    const width = Math.min(maxWidth, Math.max(32, resize.width + event.clientX - resize.pointerX));
+    resize.image.style.width = `${Math.round(width)}px`;
+    resize.image.style.height = 'auto';
+    setImageFrame(getImageFrame(resize.image));
+  };
+
+  const finishImageResize = () => {
+    if (!imageResizeRef.current) return;
+    imageResizeRef.current = null;
+    emitChange();
+  };
+
+  const resizeImageWithKeyboard = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!selectedImage || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 20 : 5;
+    const maxWidth = getImageMaxWidth();
+    const width = selectedImage.getBoundingClientRect().width
+      + (event.key === 'ArrowRight' ? step : -step);
+    selectedImage.style.width = `${Math.round(Math.min(maxWidth, Math.max(32, width)))}px`;
+    selectedImage.style.height = 'auto';
+    setImageFrame(getImageFrame(selectedImage));
+    emitChange();
+  };
+
+  const handleEditorPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !(event.target instanceof Element)) return;
+    const cell = event.target.closest<HTMLTableCellElement>('td,th');
+    const table = cell?.closest('table');
+    if (!cell || !table || !isSimpleTable(table)) return;
+
+    const columnIndex = cell.cellIndex;
+    const firstRow = table.rows[0];
+    if (columnIndex >= firstRow.cells.length - 1) return;
+    const cellRect = cell.getBoundingClientRect();
+    if (cellRect.right - event.clientX > 6) return;
+
+    const leftWidth = firstRow.cells.item(columnIndex)?.getBoundingClientRect().width ?? 0;
+    const rightWidth = firstRow.cells.item(columnIndex + 1)?.getBoundingClientRect().width ?? 0;
+    if (!leftWidth || !rightWidth) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.style.cursor = 'col-resize';
+    columnResizeRef.current = { table, columnIndex, pointerX: event.clientX, leftWidth, rightWidth };
+    setSelectedCell(cell);
+    setSelectedImage(null);
+  };
+
+  const handleEditorPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const resize = columnResizeRef.current;
+    if (!resize) {
+      const target = event.target;
+      const cell = target instanceof Element
+        ? target.closest<HTMLTableCellElement>('td,th')
+        : null;
+      const table = cell?.closest('table');
+      const nearEdge = Boolean(
+        cell
+        && table
+        && isSimpleTable(table)
+        && cell.cellIndex < table.rows[0].cells.length - 1
+        && cell.getBoundingClientRect().right - event.clientX >= 0
+        && cell.getBoundingClientRect().right - event.clientX <= 6,
+      );
+      event.currentTarget.style.cursor = nearEdge ? 'col-resize' : '';
+      return;
+    }
+
+    event.preventDefault();
+    const delta = event.clientX - resize.pointerX;
+    const minimumWidth = 64;
+    const adjustment = Math.max(
+      minimumWidth - resize.leftWidth,
+      Math.min(resize.rightWidth - minimumWidth, delta),
+    );
+    const leftWidth = resize.leftWidth + adjustment;
+    const rightWidth = resize.rightWidth - adjustment;
+    resize.table.style.tableLayout = 'fixed';
+    for (const row of Array.from(resize.table.rows)) {
+      const leftCell = row.cells.item(resize.columnIndex);
+      const rightCell = row.cells.item(resize.columnIndex + 1);
+      if (leftCell && rightCell) {
+        leftCell.style.width = `${Math.round(leftWidth)}px`;
+        rightCell.style.width = `${Math.round(rightWidth)}px`;
+      }
+    }
+  };
+
+  const finishTableResize = () => {
+    if (!columnResizeRef.current) return;
+    columnResizeRef.current = null;
+    if (editorRef.current) editorRef.current.style.cursor = '';
+    emitChange();
+  };
+
+  const handleEditorClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof Element)) return;
+    if (pendingInlineStyleRef.current && !pendingInlineStyleRef.current.contains(event.target)) {
+      clearPendingInlineStyle();
+    }
+
+    const image = event.target.closest('img');
+    if (image instanceof HTMLImageElement && editorRef.current?.contains(image)) {
+      setSelectedImage(image);
+      setSelectedCell(null);
+      return;
+    }
+
+    const cell = event.target.closest('td,th');
+    if (cell instanceof HTMLTableCellElement && editorRef.current?.contains(cell)) {
+      setSelectedCell(cell);
+      setSelectedImage(null);
+      return;
+    }
+
+    setSelectedImage(null);
+    setSelectedCell(null);
+  };
+
+  const handleEditorInput = (event: React.FormEvent<HTMLDivElement>) => {
+    clearPendingInlineStyle();
+    onChange(event.currentTarget.innerHTML);
   };
 
   const insertInlineCode = () => {
@@ -473,6 +1009,9 @@ export function RichTextEditor({
     </button>
   );
 
+  const selectedTable = selectedCell?.closest('table') ?? null;
+  const selectedTableIsSimple = selectedTable ? isSimpleTable(selectedTable) : false;
+
   return (
     <div className={['rwe', className].filter(Boolean).join(' ')}>
       <div className="rwe__toolbar" role="toolbar" aria-label="Text formatting">
@@ -493,6 +1032,94 @@ export function RichTextEditor({
               <option key={format} value={format}>{label}</option>
             ))}
           </select>
+        </div>
+        <div className="rwe__group">
+          <select
+            className="rwe__select"
+            aria-label="Font family"
+            defaultValue=""
+            disabled={isSourceEditing}
+            onMouseDown={saveSelection}
+            onChange={(event) => {
+            if (event.target.value) applyInlineStyle('fontFamily', event.target.value);
+              event.target.value = '';
+            }}
+          >
+            <option value="" disabled>Font</option>
+            {fontFamilies.map(({ value: font, label }) => (
+              <option key={font} value={font}>{label}</option>
+            ))}
+          </select>
+          <select
+            className="rwe__select"
+            aria-label="Font size"
+            defaultValue=""
+            disabled={isSourceEditing}
+            onMouseDown={saveSelection}
+            onChange={(event) => {
+              if (event.target.value) applyInlineStyle('fontSize', event.target.value);
+              event.target.value = '';
+            }}
+          >
+            <option value="" disabled>Size</option>
+            {fontSizes.map(({ value: size, label }) => (
+              <option key={size} value={size}>{label}</option>
+            ))}
+          </select>
+          <input
+            className="rwe__custom-number"
+            aria-label="Custom font size in pixels"
+            title="Enter a size from 8 to 96 pixels, then press Enter"
+            type="number"
+            required
+            min="8"
+            max="96"
+            step="1"
+            placeholder="px"
+            onMouseDown={saveSelection}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              if (!event.currentTarget.reportValidity()) return;
+              applyInlineStyle('fontSize', `${event.currentTarget.value}px`);
+              event.currentTarget.value = '';
+            }}
+          />
+          <select
+            className="rwe__select"
+            aria-label="Line spacing"
+            defaultValue=""
+            disabled={isSourceEditing}
+            onMouseDown={saveSelection}
+            onChange={(event) => {
+              if (event.target.value) applyLineSpacing(event.target.value);
+              event.target.value = '';
+            }}
+          >
+            <option value="" disabled>Spacing</option>
+            {lineSpacings.map(({ value: spacing, label }) => (
+              <option key={spacing} value={spacing}>{label}</option>
+            ))}
+          </select>
+          <input
+            className="rwe__custom-number"
+            aria-label="Custom line spacing"
+            title="Enter a multiplier from 0.8 to 3, then press Enter"
+            type="number"
+            required
+            min="0.8"
+            max="3"
+            step="0.05"
+            placeholder="×"
+            onMouseDown={saveSelection}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              if (!event.currentTarget.reportValidity()) return;
+              applyLineSpacing(event.currentTarget.value);
+              event.currentTarget.value = '';
+            }}
+          />
         </div>
         <div className="rwe__group">
           {button('Bold', 'bold', () => runCommand('bold'), 'Ctrl+B')}
@@ -519,6 +1146,13 @@ export function RichTextEditor({
           {button('Decrease indent', 'outdent', () => runCommand('outdent'))}
           {button('Increase indent', 'indent', () => runCommand('indent'))}
         </div>
+        {selectedImage && (
+          <div className="rwe__group" aria-label="Image alignment">
+            {button('Align image left', 'alignLeft', () => alignSelectedImage('left'))}
+            {button('Center image', 'alignCenter', () => alignSelectedImage('center'))}
+            {button('Align image right', 'alignRight', () => alignSelectedImage('right'))}
+          </div>
+        )}
         <div className="rwe__group">
           <label className="rwe__color">
             Text
@@ -572,6 +1206,11 @@ export function RichTextEditor({
             },
           )}
         </div>
+        {selectedTable && (
+          <div className="rwe__group">
+            {button('Table options', 'table', (event) => openDialog('table-tools', event.currentTarget))}
+          </div>
+        )}
       </div>
       {dialog === 'link' && (
         <form
@@ -681,6 +1320,53 @@ export function RichTextEditor({
           </div>
         </form>
       )}
+      {dialog === 'table-tools' && selectedTable && selectedCell && (
+        <form
+          ref={dialogRef}
+          className="rwe__dialog rwe__table-dialog"
+          aria-label="Edit table"
+          style={dialogPosition}
+          onSubmit={(event) => event.preventDefault()}
+        >
+          <p className="rwe__dialog-hint">Drag a cell boundary to resize its column.</p>
+          {!selectedTableIsSimple && (
+            <p className="rwe__dialog-hint" role="status">
+              Row and column editing is unavailable for merged cells.
+            </p>
+          )}
+          <div className="rwe__table-tools">
+            <button type="button" disabled={!selectedTableIsSimple} onClick={() => insertTableRow('above')}>
+              Insert row above
+            </button>
+            <button type="button" disabled={!selectedTableIsSimple} onClick={() => insertTableRow('below')}>
+              Insert row below
+            </button>
+            <button
+              type="button"
+              disabled={!selectedTableIsSimple || selectedTable.rows.length <= 1}
+              onClick={removeTableRow}
+            >
+              Remove row
+            </button>
+            <button type="button" disabled={!selectedTableIsSimple} onClick={() => insertTableColumn('before')}>
+              Insert column before
+            </button>
+            <button type="button" disabled={!selectedTableIsSimple} onClick={() => insertTableColumn('after')}>
+              Insert column after
+            </button>
+            <button
+              type="button"
+              disabled={!selectedTableIsSimple || selectedTable.rows[0].cells.length <= 1}
+              onClick={removeTableColumn}
+            >
+              Remove column
+            </button>
+            <button className="rwe__table-delete" type="button" onClick={deleteTable}>
+              Delete table
+            </button>
+          </div>
+        </form>
+      )}
       <textarea
         className="rwe__source"
         aria-label="HTML source"
@@ -699,12 +1385,49 @@ export function RichTextEditor({
         aria-label={ariaLabel}
         aria-multiline="true"
         data-placeholder={placeholder}
-        onInput={(event) => onChange(event.currentTarget.innerHTML)}
+        onInput={handleEditorInput}
         onKeyDown={handleKeyDown}
         onKeyUp={handleEditorSelection}
         onMouseUp={handleEditorSelection}
-        onBlur={saveSelection}
+        onClick={handleEditorClick}
+        onPaste={handlePaste}
+        onPointerDown={handleEditorPointerDown}
+        onPointerMove={handleEditorPointerMove}
+        onPointerUp={finishTableResize}
+        onPointerCancel={finishTableResize}
+        onPointerLeave={(event) => {
+          if (!columnResizeRef.current) event.currentTarget.style.cursor = '';
+        }}
+        onBlur={(event) => {
+          const nextTarget = event.relatedTarget;
+          if (!(nextTarget instanceof Node && event.currentTarget.parentElement?.contains(nextTarget))) {
+            clearPendingInlineStyle();
+          }
+        }}
       />
+      {selectedImage && imageFrame && !isSourceEditing && (
+        <div
+          className="rwe__image-selection"
+          style={{
+            height: imageFrame.height,
+            left: imageFrame.left,
+            top: imageFrame.top,
+            width: imageFrame.width,
+          }}
+        >
+          <button
+            className="rwe__image-resize-handle"
+            type="button"
+            aria-label="Resize image"
+            title="Drag or use arrow keys to resize"
+            onPointerDown={startImageResize}
+            onPointerMove={moveImageResize}
+            onPointerUp={finishImageResize}
+            onPointerCancel={finishImageResize}
+            onKeyDown={resizeImageWithKeyboard}
+          />
+        </div>
+      )}
     </div>
   );
 }

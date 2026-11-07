@@ -55,6 +55,8 @@ type FormatSnapshot = {
   textAlign: string;
 };
 
+type DialogType = 'link' | 'image' | 'table';
+
 type IconName =
   | 'bold'
   | 'italic'
@@ -174,7 +176,10 @@ export function RichTextEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const copiedFormatRef = useRef<FormatSnapshot | null>(null);
-  const [dialog, setDialog] = useState<'link' | 'image' | 'table' | null>(null);
+  const dialogRef = useRef<HTMLFormElement>(null);
+  const dialogTriggerRef = useRef<HTMLElement | null>(null);
+  const [dialog, setDialog] = useState<DialogType | null>(null);
+  const [dialogPosition, setDialogPosition] = useState({ top: 0, left: 0 });
   const [isSourceEditing, setIsSourceEditing] = useState(false);
   const [isFormatPainterActive, setIsFormatPainterActive] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -190,6 +195,24 @@ export function RichTextEditor({
       editor.innerHTML = value;
     }
   }, [value]);
+
+  useEffect(() => {
+    if (!dialog) return;
+
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node
+        && !dialogRef.current?.contains(target)
+        && !dialogTriggerRef.current?.contains(target)
+      ) {
+        setDialog(null);
+      }
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, [dialog]);
 
   const saveSelection = () => {
     const editor = editorRef.current;
@@ -310,16 +333,44 @@ export function RichTextEditor({
     if (isFormatPainterActive) pasteFormatting();
   };
 
-  const openLinkDialog = () => {
-    setLinkUrl('');
-    setDialog('link');
+  const openDialog = (nextDialog: DialogType, trigger: HTMLElement) => {
+    if (dialog === nextDialog && dialogTriggerRef.current === trigger) {
+      setDialog(null);
+      return;
+    }
+
+    const container = editorRef.current?.parentElement;
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    const maxLeft = container.clientWidth - 328;
+    dialogTriggerRef.current = trigger;
+    setDialogPosition({
+      top: triggerRect.bottom - containerRect.top - container.clientTop + 6,
+      left: Math.max(
+        8,
+        Math.min(
+          triggerRect.left - containerRect.left - container.clientLeft,
+          maxLeft,
+        ),
+      ),
+    });
+    setDialog(nextDialog);
   };
 
-  const openImageDialog = () => {
+  const openLinkDialog = (trigger?: HTMLElement) => {
+    setLinkUrl('');
+    const anchor = trigger
+      ?? editorRef.current?.parentElement?.querySelector<HTMLButtonElement>('[aria-label="Add link"]');
+    if (anchor) openDialog('link', anchor);
+  };
+
+  const openImageDialog = (trigger: HTMLButtonElement) => {
     setImageUrl('');
     setImageAlt('');
     setImageUrlError('');
-    setDialog('image');
+    openDialog('image', trigger);
   };
 
   const insertImage = (event: React.FormEvent<HTMLFormElement>) => {
@@ -402,7 +453,7 @@ export function RichTextEditor({
   const button = (
     label: string,
     icon: IconName,
-    onClick: () => void,
+    onClick: (event: React.MouseEvent<HTMLButtonElement>) => void,
     shortcut?: string,
     disabled = false,
     pressed?: boolean,
@@ -459,8 +510,8 @@ export function RichTextEditor({
         <div className="rwe__group">
           {button('Bulleted list', 'bulletedList', () => runCommand('insertUnorderedList'))}
           {button('Numbered list', 'numberedList', () => runCommand('insertOrderedList'))}
-          {button('Insert table', 'table', () => setDialog('table'))}
-          {button('Insert image', 'image', openImageDialog)}
+          {button('Insert table', 'table', (event) => openDialog('table', event.currentTarget))}
+          {button('Insert image', 'image', (event) => openImageDialog(event.currentTarget))}
           {button('Horizontal rule', 'rule', () => runCommand('insertHorizontalRule'))}
         </div>
         <div className="rwe__group">
@@ -496,7 +547,7 @@ export function RichTextEditor({
           </label>
         </div>
         <div className="rwe__group">
-          {button('Add link', 'link', openLinkDialog, 'Ctrl+K')}
+          {button('Add link', 'link', (event) => openLinkDialog(event.currentTarget), 'Ctrl+K')}
           {button('Remove link', 'unlink', () => runCommand('unlink'))}
           {button('Undo', 'undo', () => runCommand('undo'), 'Ctrl+Z')}
           {button('Redo', 'redo', () => runCommand('redo'), 'Ctrl+Y')}
@@ -527,8 +578,10 @@ export function RichTextEditor({
       </div>
       {dialog === 'link' && (
         <form
+          ref={dialogRef}
           className="rwe__dialog"
           aria-label="Insert link"
+          style={dialogPosition}
           onSubmit={(event) => {
             event.preventDefault();
             if (linkUrl.trim()) runCommand('createLink', linkUrl.trim());
@@ -554,8 +607,10 @@ export function RichTextEditor({
       )}
       {dialog === 'image' && (
         <form
+          ref={dialogRef}
           className="rwe__dialog"
           aria-label="Insert image"
+          style={dialogPosition}
           onSubmit={insertImage}
         >
           <label>
@@ -589,8 +644,10 @@ export function RichTextEditor({
       )}
       {dialog === 'table' && (
         <form
+          ref={dialogRef}
           className="rwe__dialog"
           aria-label="Insert table"
+          style={dialogPosition}
           onSubmit={(event) => {
             event.preventDefault();
             insertTable(Number(tableRows), Number(tableColumns));

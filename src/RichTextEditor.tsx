@@ -91,7 +91,7 @@ const iconPaths: Record<IconName, string> = {
   subscript: '',
   superscript: '',
   code: 'm7 7-5 5 5 5 M17 7l5 5-5 5 M14 4l-4 16',
-  clear: 'M4 5h16 M7 5l1 15h8l1-15 M9 9v7 M15 9v7',
+  clear: 'M4 5h12 M10 5v13 M16 16l5 5 M21 16l-5 5',
   bulletedList: 'M9 6h12 M9 12h12 M9 18h12 M4 6h.01 M4 12h.01 M4 18h.01',
   numberedList: 'M10 6h11 M10 12h11 M10 18h11',
   table: 'M3 4h18v16H3z M3 10h18 M3 15h18 M9 4v16 M15 4v16',
@@ -145,9 +145,6 @@ function Icon({ name }: { name: IconName }) {
       )}
       {name === 'strike' && (
         <text className="rwe__icon-text" x="12" y="17" textAnchor="middle">S</text>
-      )}
-      {name === 'clear' && (
-        <text className="rwe__icon-text rwe__icon-text--clear" x="12" y="15" textAnchor="middle">T</text>
       )}
     </svg>
   );

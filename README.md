@@ -12,6 +12,8 @@ npm install github:kenc90/react-wysiwyg
 
 GitHub installs build the package automatically before installation.
 
+Requires `react` and `react-dom` 18 or newer as peer dependencies.
+
 ## Usage
 
 ```tsx

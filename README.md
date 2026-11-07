@@ -5,8 +5,10 @@ A lightweight WYSIWYG editor component for React.
 ## Install
 
 ```sh
-npm install react-wysiwyg
+npm install github:kenc90/react-wysiwyg
 ```
+
+GitHub installs build the package automatically before installation.
 
 ## Usage
 

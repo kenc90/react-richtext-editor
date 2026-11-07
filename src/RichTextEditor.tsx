@@ -280,6 +280,7 @@ export function RichTextEditor({
   const [imageFrame, setImageFrame] = useState<ImageFrame | null>(null);
   const [selectedCell, setSelectedCell] = useState<HTMLTableCellElement | null>(null);
   const [toolbarFormat, setToolbarFormat] = useState(initialToolbarFormat);
+  const [customFontSizeDraft, setCustomFontSizeDraft] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
@@ -538,8 +539,18 @@ export function RichTextEditor({
 
     const reusableSpans = Array.from(editor.querySelectorAll<HTMLElement>('span')).filter((span) => {
       if (!range.intersectsNode(span)) return false;
+      const textWalker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+      const firstText = textWalker.nextNode() as Text | null;
+      if (!firstText) return false;
+      let lastText = firstText;
+      let nextText = textWalker.nextNode() as Text | null;
+      while (nextText) {
+        lastText = nextText;
+        nextText = textWalker.nextNode() as Text | null;
+      }
       const spanRange = document.createRange();
-      spanRange.selectNodeContents(span);
+      spanRange.setStart(firstText, 0);
+      spanRange.setEnd(lastText, lastText.length);
       const fullySelected = range.compareBoundaryPoints(Range.START_TO_START, spanRange) <= 0
         && range.compareBoundaryPoints(Range.END_TO_END, spanRange) >= 0;
       if (fullySelected) span.style[property] = value;
@@ -1237,16 +1248,17 @@ export function RichTextEditor({
             max="96"
             step="0.5"
             placeholder="px"
-            value={fontSizePreset ? '' : toolbarFormat.fontSize}
+            value={customFontSizeDraft || (fontSizePreset ? '' : toolbarFormat.fontSize)}
             onMouseDown={saveSelection}
-            onChange={(event) => {
-              setToolbarFormat((current) => ({ ...current, fontSize: event.target.value }));
-            }}
+            onChange={(event) => setCustomFontSizeDraft(event.target.value)}
+            onBlur={() => setCustomFontSizeDraft('')}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();
               if (!event.currentTarget.reportValidity()) return;
-              applyInlineStyle('fontSize', `${event.currentTarget.value}px`);
+              const fontSize = event.currentTarget.value;
+              applyInlineStyle('fontSize', `${fontSize}px`);
+              setCustomFontSizeDraft('');
             }}
           />
           <select

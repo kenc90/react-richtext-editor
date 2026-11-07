@@ -11,6 +11,7 @@
     "isolatedModules": true,
     "declaration": true,
     "emitDeclarationOnly": true,
+    "rootDir": "./src",
     "outDir": "dist",
     "tsBuildInfoFile": "node_modules/.cache/react-wysiwyg.tsbuildinfo",
     "jsx": "react-jsx",

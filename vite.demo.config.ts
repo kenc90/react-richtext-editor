@@ -1,8 +1,13 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
-export default defineConfig({
-  base: '/react-wysiwyg/',
+const demoRoot = fileURLToPath(new URL('./demo', import.meta.url));
+
+export default defineConfig(({ command }) => ({
+  root: demoRoot,
+  base: command === 'build' ? '/react-wysiwyg/' : '/',
   build: {
-    outDir: 'demo-dist',
+    outDir: '..',
+    emptyOutDir: false,
   },
-});
+}));

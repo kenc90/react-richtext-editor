@@ -18,6 +18,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["src"],
-  "exclude": ["src/main.tsx"]
+  "include": ["src"]
 }

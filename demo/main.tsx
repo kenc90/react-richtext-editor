@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { RichTextEditor } from './RichTextEditor';
-import './style.css';
+import { RichTextEditor } from '../src/RichTextEditor';
+import '../src/style.css';
 
 function Demo() {
   const [value, setValue] = useState(

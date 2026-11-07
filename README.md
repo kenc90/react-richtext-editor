@@ -40,4 +40,4 @@ npm install
 npm run build
 ```
 
-The GitHub Pages demo is built with `npm run build:demo`. The Pages workflow deploys it when changes are pushed to `main`. Enable **Settings → Pages → Build and deployment → GitHub Actions** in the repository to publish it.
+To update the demo for GitHub Pages configured to deploy from the `main` branch root, run `npm run build:demo` and commit the generated root `index.html` and `assets/` files. No GitHub Action is required.

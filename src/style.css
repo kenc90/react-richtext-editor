@@ -178,10 +178,6 @@
   outline: none;
 }
 
-.rwe__content--format-painter {
-  cursor: crosshair;
-}
-
 .rwe__source {
   box-sizing: border-box;
   border: 0;

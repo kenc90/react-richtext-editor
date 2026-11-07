@@ -67,6 +67,7 @@ type IconName =
   | 'bulletedList'
   | 'numberedList'
   | 'table'
+  | 'image'
   | 'rule'
   | 'alignLeft'
   | 'alignCenter'
@@ -92,6 +93,7 @@ const iconPaths: Record<IconName, string> = {
   bulletedList: 'M9 6h12 M9 12h12 M9 18h12 M4 6h.01 M4 12h.01 M4 18h.01',
   numberedList: 'M10 6h11 M10 12h11 M10 18h11',
   table: 'M3 4h18v16H3z M3 10h18 M3 15h18 M9 4v16 M15 4v16',
+  image: 'M4 4h16v16H4z M4 15l5-5 4 4 3-3 4 4 M9 8h.01',
   rule: 'M3 12h18',
   alignLeft: 'M3 5h18 M3 10h12 M3 15h18 M3 20h12',
   alignCenter: 'M3 5h18 M6 10h12 M3 15h18 M6 20h12',
@@ -172,10 +174,13 @@ export function RichTextEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const copiedFormatRef = useRef<FormatSnapshot | null>(null);
-  const [dialog, setDialog] = useState<'link' | 'table' | null>(null);
+  const [dialog, setDialog] = useState<'link' | 'image' | 'table' | null>(null);
   const [isSourceEditing, setIsSourceEditing] = useState(false);
   const [isFormatPainterActive, setIsFormatPainterActive] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
+  const [imageUrlError, setImageUrlError] = useState('');
   const [tableRows, setTableRows] = useState('3');
   const [tableColumns, setTableColumns] = useState('3');
 
@@ -310,6 +315,36 @@ export function RichTextEditor({
     setDialog('link');
   };
 
+  const openImageDialog = () => {
+    setImageUrl('');
+    setImageAlt('');
+    setImageUrlError('');
+    setDialog('image');
+  };
+
+  const insertImage = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    let url: URL;
+    try {
+      url = new URL(imageUrl.trim());
+    } catch {
+      setImageUrlError('Enter a valid image URL.');
+      return;
+    }
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      setImageUrlError('Use an HTTP or HTTPS image URL.');
+      return;
+    }
+
+    runCommand(
+      'insertHTML',
+      `<img src="${escapeHtml(url.href)}" alt="${escapeHtml(imageAlt.trim())}">`,
+    );
+    setDialog(null);
+  };
+
   const insertTable = (rows: number, columns: number) => {
     const header = `<tr>${'<th><br></th>'.repeat(columns)}</tr>`;
     const body = Array.from({ length: rows - 1 }, () => (
@@ -425,6 +460,7 @@ export function RichTextEditor({
           {button('Bulleted list', 'bulletedList', () => runCommand('insertUnorderedList'))}
           {button('Numbered list', 'numberedList', () => runCommand('insertOrderedList'))}
           {button('Insert table', 'table', () => setDialog('table'))}
+          {button('Insert image', 'image', openImageDialog)}
           {button('Horizontal rule', 'rule', () => runCommand('insertHorizontalRule'))}
         </div>
         <div className="rwe__group">
@@ -513,6 +549,41 @@ export function RichTextEditor({
           <div className="rwe__dialog-actions">
             <button type="button" onClick={() => setDialog(null)}>Cancel</button>
             <button type="submit">Insert link</button>
+          </div>
+        </form>
+      )}
+      {dialog === 'image' && (
+        <form
+          className="rwe__dialog"
+          aria-label="Insert image"
+          onSubmit={insertImage}
+        >
+          <label>
+            Image URL
+            <input
+              autoFocus
+              type="url"
+              required
+              value={imageUrl}
+              placeholder="https://example.com/image.jpg"
+              onChange={(event) => {
+                setImageUrl(event.target.value);
+                setImageUrlError('');
+              }}
+            />
+          </label>
+          <label>
+            Alt text (optional)
+            <input
+              type="text"
+              value={imageAlt}
+              onChange={(event) => setImageAlt(event.target.value)}
+            />
+          </label>
+          {imageUrlError && <p className="rwe__dialog-error" role="alert">{imageUrlError}</p>}
+          <div className="rwe__dialog-actions">
+            <button type="button" onClick={() => setDialog(null)}>Cancel</button>
+            <button type="submit">Insert image</button>
           </div>
         </form>
       )}

@@ -119,6 +119,13 @@
   gap: 0.25rem;
 }
 
+.rwe__dialog-error {
+  color: #b91c1c;
+  flex-basis: 100%;
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
 .rwe__dialog input {
   border: 1px solid #cbd5e1;
   border-radius: 0.25rem;

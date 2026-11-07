@@ -96,3 +96,7 @@ npm run build
 ```
 
 `npm run dev` starts the local demo. The GitHub Pages workflow builds and deploys the demo automatically on pushes to `main`; no generated demo files need to be committed. Set the repository's Pages source to **GitHub Actions** in **Settings → Pages**.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE).

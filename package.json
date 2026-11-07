@@ -2,6 +2,7 @@
   "name": "react-wysiwyg",
   "version": "0.1.0",
   "description": "A lightweight WYSIWYG editor component for React",
+  "license": "MIT",
   "type": "module",
   "files": [
     "dist"

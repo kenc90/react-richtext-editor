@@ -31,8 +31,6 @@ type EditorCommand =
   | 'foreColor'
   | 'hiliteColor'
   | 'insertHTML'
-  | 'undo'
-  | 'redo'
   | 'removeFormat';
 
 const blockFormats = [
@@ -266,6 +264,13 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
+  const historyRef = useRef({
+    undo: [] as string[],
+    redo: [] as string[],
+    currentHtml: value,
+    lastInputType: '',
+    lastInputAt: 0,
+  });
   const copiedFormatRef = useRef<FormatSnapshot | null>(null);
   const pendingInlineStyleRef = useRef<HTMLSpanElement | null>(null);
   const dialogRef = useRef<HTMLFormElement>(null);
@@ -394,7 +399,11 @@ export function RichTextEditor({
         setSelectedImage(null);
         setImageFrame(null);
         setSelectedCell(null);
+        historyRef.current.undo = [];
+        historyRef.current.redo = [];
+        historyRef.current.lastInputType = '';
       }
+      historyRef.current.currentHtml = editor.innerHTML;
       syncToolbarFormat();
     }
   }, [value]);
@@ -462,11 +471,132 @@ export function RichTextEditor({
     selection.addRange(range);
   };
 
-  const emitChange = () => {
-    if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
-      syncToolbarFormat();
+  const getTextOffset = (editor: HTMLElement, container: Node, offset: number) => {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.setEnd(container, offset);
+    return range.toString().length;
+  };
+
+  const getTextBoundary = (editor: HTMLElement, offset: number) => {
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode() as Text | null;
+    let lastNode: Text | null = null;
+    let remaining = offset;
+
+    while (node) {
+      if (remaining <= node.length) return { node, offset: remaining };
+      remaining -= node.length;
+      lastNode = node;
+      node = walker.nextNode() as Text | null;
     }
+
+    return lastNode
+      ? { node: lastNode, offset: lastNode.length }
+      : { node: editor, offset: 0 };
+  };
+
+  const restoreSelectionAtTextOffsets = (
+    editor: HTMLElement,
+    offsets: { start: number; end: number },
+  ) => {
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    const start = getTextBoundary(editor, offsets.start);
+    const end = getTextBoundary(editor, offsets.end);
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    selectionRef.current = range.cloneRange();
+  };
+
+  const getCurrentSelectionOffsets = (editor: HTMLElement) => {
+    const selection = window.getSelection();
+    const liveRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const range = liveRange && editor.contains(liveRange.commonAncestorContainer)
+      ? liveRange
+      : selectionRef.current && editor.contains(selectionRef.current.commonAncestorContainer)
+        ? selectionRef.current
+        : null;
+    if (!range) return null;
+
+    return {
+      start: getTextOffset(editor, range.startContainer, range.startOffset),
+      end: getTextOffset(editor, range.endContainer, range.endOffset),
+    };
+  };
+
+  const applyHistorySnapshot = (html: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const offsets = getCurrentSelectionOffsets(editor);
+    editor.innerHTML = html;
+    editor.focus();
+    const textLength = editor.textContent?.length ?? 0;
+    restoreSelectionAtTextOffsets(
+      editor,
+      offsets ?? { start: textLength, end: textLength },
+    );
+
+    const history = historyRef.current;
+    history.currentHtml = html;
+    history.lastInputType = '';
+    history.lastInputAt = 0;
+    setSelectedImage(null);
+    setImageFrame(null);
+    setSelectedCell(null);
+    onChange(html);
+    syncToolbarFormat();
+  };
+
+  const undoChange = () => {
+    const editor = editorRef.current;
+    const previousHtml = historyRef.current.undo.pop();
+    if (!editor || previousHtml === undefined) return;
+    historyRef.current.redo.push(editor.innerHTML);
+    applyHistorySnapshot(previousHtml);
+  };
+
+  const redoChange = () => {
+    const editor = editorRef.current;
+    const nextHtml = historyRef.current.redo.pop();
+    if (!editor || nextHtml === undefined) return;
+    historyRef.current.undo.push(editor.innerHTML);
+    applyHistorySnapshot(nextHtml);
+  };
+
+  const emitChange = (inputType = '') => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const history = historyRef.current;
+    const html = editor.innerHTML;
+    if (html !== history.currentHtml) {
+      const now = Date.now();
+      const isGroupableInput = [
+        'insertText',
+        'deleteContentBackward',
+        'deleteContentForward',
+      ].includes(inputType);
+      const canGroup = isGroupableInput
+        && history.lastInputType === inputType
+        && now - history.lastInputAt < 1000;
+      if (!canGroup) history.undo.push(history.currentHtml);
+      history.redo = [];
+      history.currentHtml = html;
+      history.lastInputType = isGroupableInput ? inputType : '';
+      history.lastInputAt = isGroupableInput ? now : 0;
+    } else if (!inputType) {
+      history.lastInputType = '';
+      history.lastInputAt = 0;
+    }
+
+    onChange(html);
+    syncToolbarFormat();
   };
 
   const readNonNegativeNumber = (input: HTMLInputElement) => {
@@ -617,6 +747,7 @@ export function RichTextEditor({
 
     editor.focus();
     restoreSelection();
+    clearPendingInlineStyle();
     const selection = window.getSelection();
     const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
     const blocks = Array.from(editor.querySelectorAll<HTMLElement>(
@@ -640,7 +771,6 @@ export function RichTextEditor({
       (block ?? editor).style.lineHeight = lineHeight;
     }
 
-    clearPendingInlineStyle();
     emitChange();
     saveSelection();
   };
@@ -1107,9 +1237,10 @@ export function RichTextEditor({
     setSelectedCell(null);
   };
 
-  const handleEditorInput = () => {
+  const handleEditorInput = (event: React.FormEvent<HTMLDivElement>) => {
     clearPendingInlineStyle();
-    emitChange();
+    const nativeEvent = event.nativeEvent;
+    emitChange(nativeEvent instanceof InputEvent ? nativeEvent.inputType : '');
   };
 
   const insertInlineCode = () => {
@@ -1121,6 +1252,18 @@ export function RichTextEditor({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && key === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) redoChange();
+      else undoChange();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && key === 'y') {
+      event.preventDefault();
+      redoChange();
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       saveSelection();
@@ -1380,8 +1523,8 @@ export function RichTextEditor({
         <div className="rwe__group">
           {button('Add link', 'link', (event) => openLinkDialog(event.currentTarget), 'Ctrl+K')}
           {button('Remove link', 'unlink', () => runCommand('unlink'))}
-          {button('Undo', 'undo', () => runCommand('undo'), 'Ctrl+Z')}
-          {button('Redo', 'redo', () => runCommand('redo'), 'Ctrl+Y')}
+          {button('Undo', 'undo', () => undoChange(), 'Ctrl+Z')}
+          {button('Redo', 'redo', () => redoChange(), 'Ctrl+Y')}
           {button(
             'Format painter',
             'formatPainter',

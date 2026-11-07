@@ -1,0 +1,443 @@
+import { useEffect, useRef, useState } from 'react';
+
+export interface RichTextEditorProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  ariaLabel?: string;
+  className?: string;
+}
+
+type EditorCommand =
+  | 'bold'
+  | 'italic'
+  | 'underline'
+  | 'strikeThrough'
+  | 'subscript'
+  | 'superscript'
+  | 'insertUnorderedList'
+  | 'insertOrderedList'
+  | 'createLink'
+  | 'unlink'
+  | 'insertHorizontalRule'
+  | 'formatBlock'
+  | 'justifyLeft'
+  | 'justifyCenter'
+  | 'justifyRight'
+  | 'justifyFull'
+  | 'indent'
+  | 'outdent'
+  | 'foreColor'
+  | 'hiliteColor'
+  | 'insertHTML'
+  | 'undo'
+  | 'redo'
+  | 'removeFormat';
+
+const blockFormats = [
+  { value: '<p>', label: 'Paragraph' },
+  { value: '<h1>', label: 'Heading 1' },
+  { value: '<h2>', label: 'Heading 2' },
+  { value: '<h3>', label: 'Heading 3' },
+  { value: '<blockquote>', label: 'Blockquote' },
+  { value: '<pre>', label: 'Code block' },
+];
+
+type IconName =
+  | 'bold'
+  | 'italic'
+  | 'underline'
+  | 'strike'
+  | 'subscript'
+  | 'superscript'
+  | 'code'
+  | 'clear'
+  | 'bulletedList'
+  | 'numberedList'
+  | 'table'
+  | 'rule'
+  | 'alignLeft'
+  | 'alignCenter'
+  | 'alignRight'
+  | 'justify'
+  | 'indent'
+  | 'outdent'
+  | 'link'
+  | 'unlink'
+  | 'undo'
+  | 'redo';
+
+const iconPaths: Record<IconName, string> = {
+  bold: '',
+  italic: '',
+  underline: 'M5 4v7a7 7 0 0 0 14 0V4 M4 21h16',
+  strike: 'M4 12h16 M7 7a4 4 0 0 1 7-2 M17 17a4 4 0 0 1-7 2',
+  subscript: '',
+  superscript: '',
+  code: 'm7 7-5 5 5 5 M17 7l5 5-5 5 M14 4l-4 16',
+  clear: 'M4 5h16 M7 5l1 15h8l1-15 M9 9v7 M15 9v7',
+  bulletedList: 'M9 6h12 M9 12h12 M9 18h12 M4 6h.01 M4 12h.01 M4 18h.01',
+  numberedList: 'M10 6h11 M10 12h11 M10 18h11',
+  table: 'M3 4h18v16H3z M3 10h18 M3 15h18 M9 4v16 M15 4v16',
+  rule: 'M3 12h18',
+  alignLeft: 'M3 5h18 M3 10h12 M3 15h18 M3 20h12',
+  alignCenter: 'M3 5h18 M6 10h12 M3 15h18 M6 20h12',
+  alignRight: 'M3 5h18 M9 10h12 M3 15h18 M9 20h12',
+  justify: 'M3 5h18 M3 10h18 M3 15h18 M3 20h18',
+  indent: 'M3 5h18 M9 10h12 M9 15h12 M3 20h18 M3 12l3 3-3 3',
+  outdent: 'M3 5h18 M9 10h12 M9 15h12 M3 20h18 M6 12l-3 3 3 3',
+  link: 'M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7 M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7',
+  unlink: 'M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7 M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7 M3 3l18 18',
+  undo: 'M9 14 4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-2',
+  redo: 'm15 14 5-5-5-5 M20 9H10a6 6 0 0 0 0 12h2',
+};
+
+const iconText: Partial<Record<IconName, string>> = {
+  bold: 'B',
+  italic: 'I',
+  subscript: 'x₂',
+  superscript: 'x²',
+  numberedList: '1',
+};
+
+function Icon({ name }: { name: IconName }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="rwe__icon"
+      fill="none"
+      focusable="false"
+      viewBox="0 0 24 24"
+    >
+      {iconPaths[name] && <path d={iconPaths[name]} />}
+      {iconText[name] && (
+        <text
+          className={`rwe__icon-text rwe__icon-text--${name}`}
+          x={name === 'numberedList' ? 5 : 12}
+          y="17"
+          textAnchor="middle"
+        >
+          {iconText[name]}
+        </text>
+      )}
+      {name === 'strike' && (
+        <text className="rwe__icon-text" x="12" y="17" textAnchor="middle">S</text>
+      )}
+      {name === 'clear' && (
+        <text className="rwe__icon-text rwe__icon-text--clear" x="12" y="15" textAnchor="middle">T</text>
+      )}
+    </svg>
+  );
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character];
+  });
+}
+
+export function RichTextEditor({
+  value,
+  onChange,
+  placeholder = 'Start writing…',
+  ariaLabel = 'Rich text editor',
+  className,
+}: RichTextEditorProps) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef<Range | null>(null);
+  const [dialog, setDialog] = useState<'link' | 'table' | null>(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [tableRows, setTableRows] = useState('3');
+  const [tableColumns, setTableColumns] = useState('3');
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor && editor.innerHTML !== value) {
+      editor.innerHTML = value;
+    }
+  }, [value]);
+
+  const saveSelection = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection?.rangeCount) return;
+
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) {
+      selectionRef.current = range.cloneRange();
+    }
+  };
+
+  const restoreSelection = () => {
+    const selection = window.getSelection();
+    const range = selectionRef.current;
+    if (!selection || !range) return;
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  const emitChange = () => {
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+  };
+
+  const runCommand = (command: EditorCommand, commandValue?: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+    restoreSelection();
+    if (command === 'foreColor' || command === 'hiliteColor') {
+      document.execCommand('styleWithCSS', false, 'true');
+    }
+    document.execCommand(command, false, commandValue);
+    emitChange();
+    saveSelection();
+  };
+
+  const openLinkDialog = () => {
+    setLinkUrl('');
+    setDialog('link');
+  };
+
+  const insertTable = (rows: number, columns: number) => {
+    const header = `<tr>${'<th><br></th>'.repeat(columns)}</tr>`;
+    const body = Array.from({ length: rows - 1 }, () => (
+      `<tr>${'<td><br></td>'.repeat(columns)}</tr>`
+    )).join('');
+    runCommand('insertHTML', `<table><thead>${header}</thead><tbody>${body}</tbody></table><p><br></p>`);
+    setDialog(null);
+  };
+
+  const insertInlineCode = () => {
+    restoreSelection();
+    const selection = window.getSelection();
+    const selectedText = selection?.toString() ?? '';
+    const content = selectedText ? escapeHtml(selectedText) : '<br>';
+    runCommand('insertHTML', `<code>${content}</code>`);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      saveSelection();
+      openLinkDialog();
+      return;
+    }
+
+    if (event.key !== ' ') return;
+
+    const selection = window.getSelection();
+    const editor = editorRef.current;
+    const node = selection?.anchorNode;
+    if (!editor || !selection?.isCollapsed || !node || node.nodeType !== Node.TEXT_NODE) return;
+
+    const textBeforeCaret = node.textContent?.slice(0, selection.anchorOffset) ?? '';
+    const block = node.parentElement?.closest('p, div');
+    if (!block || block.textContent !== textBeforeCaret) return;
+
+    const shortcut = /^#{1,3}$/.test(textBeforeCaret)
+      ? { command: 'formatBlock', value: `<h${textBeforeCaret.length}>` }
+      : textBeforeCaret === '>'
+        ? { command: 'formatBlock', value: '<blockquote>' }
+        : textBeforeCaret === '-'
+          ? { command: 'insertUnorderedList' }
+          : textBeforeCaret === '1.'
+            ? { command: 'insertOrderedList' }
+            : null;
+
+    if (!shortcut) return;
+    event.preventDefault();
+    document.execCommand('delete');
+    document.execCommand(shortcut.command, false, shortcut.value);
+    emitChange();
+    saveSelection();
+  };
+
+  const button = (
+    label: string,
+    icon: IconName,
+    onClick: () => void,
+    shortcut?: string,
+  ) => (
+    <button
+      className="rwe__button"
+      key={label}
+      type="button"
+      aria-label={label}
+      title={shortcut ? `${label} (${shortcut})` : label}
+      onMouseDown={(event) => {
+        saveSelection();
+        event.preventDefault();
+      }}
+      onClick={onClick}
+    >
+      <Icon name={icon} />
+    </button>
+  );
+
+  return (
+    <div className={['rwe', className].filter(Boolean).join(' ')}>
+      <div className="rwe__toolbar" role="toolbar" aria-label="Text formatting">
+        <div className="rwe__group">
+          <select
+            className="rwe__select"
+            aria-label="Block format"
+            defaultValue=""
+            onMouseDown={saveSelection}
+            onChange={(event) => {
+              if (event.target.value) runCommand('formatBlock', event.target.value);
+              event.target.value = '';
+            }}
+          >
+            <option value="" disabled>Paragraph</option>
+            {blockFormats.slice(1).map(({ value: format, label }) => (
+              <option key={format} value={format}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="rwe__group">
+          {button('Bold', 'bold', () => runCommand('bold'), 'Ctrl+B')}
+          {button('Italic', 'italic', () => runCommand('italic'), 'Ctrl+I')}
+          {button('Underline', 'underline', () => runCommand('underline'))}
+          {button('Strikethrough', 'strike', () => runCommand('strikeThrough'))}
+          {button('Subscript', 'subscript', () => runCommand('subscript'))}
+          {button('Superscript', 'superscript', () => runCommand('superscript'))}
+          {button('Inline code', 'code', insertInlineCode)}
+          {button('Clear formatting', 'clear', () => runCommand('removeFormat'))}
+        </div>
+        <div className="rwe__group">
+          {button('Bulleted list', 'bulletedList', () => runCommand('insertUnorderedList'))}
+          {button('Numbered list', 'numberedList', () => runCommand('insertOrderedList'))}
+          {button('Insert table', 'table', () => setDialog('table'))}
+          {button('Horizontal rule', 'rule', () => runCommand('insertHorizontalRule'))}
+        </div>
+        <div className="rwe__group">
+          {button('Align left', 'alignLeft', () => runCommand('justifyLeft'))}
+          {button('Align center', 'alignCenter', () => runCommand('justifyCenter'))}
+          {button('Align right', 'alignRight', () => runCommand('justifyRight'))}
+          {button('Justify', 'justify', () => runCommand('justifyFull'))}
+          {button('Decrease indent', 'outdent', () => runCommand('outdent'))}
+          {button('Increase indent', 'indent', () => runCommand('indent'))}
+        </div>
+        <div className="rwe__group">
+          <label className="rwe__color">
+            Text
+            <input
+              aria-label="Text color"
+              type="color"
+              defaultValue="#0f172a"
+              onMouseDown={saveSelection}
+              onChange={(event) => runCommand('foreColor', event.target.value)}
+            />
+          </label>
+          <label className="rwe__color">
+            Highlight
+            <input
+              aria-label="Highlight color"
+              type="color"
+              defaultValue="#fff176"
+              onMouseDown={saveSelection}
+              onChange={(event) => runCommand('hiliteColor', event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="rwe__group">
+          {button('Add link', 'link', openLinkDialog, 'Ctrl+K')}
+          {button('Remove link', 'unlink', () => runCommand('unlink'))}
+          {button('Undo', 'undo', () => runCommand('undo'), 'Ctrl+Z')}
+          {button('Redo', 'redo', () => runCommand('redo'), 'Ctrl+Y')}
+        </div>
+      </div>
+      {dialog === 'link' && (
+        <form
+          className="rwe__dialog"
+          aria-label="Insert link"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (linkUrl.trim()) runCommand('createLink', linkUrl.trim());
+            setDialog(null);
+          }}
+        >
+          <label>
+            URL
+            <input
+              autoFocus
+              type="url"
+              required
+              value={linkUrl}
+              placeholder="https://example.com"
+              onChange={(event) => setLinkUrl(event.target.value)}
+            />
+          </label>
+          <div className="rwe__dialog-actions">
+            <button type="button" onClick={() => setDialog(null)}>Cancel</button>
+            <button type="submit">Insert link</button>
+          </div>
+        </form>
+      )}
+      {dialog === 'table' && (
+        <form
+          className="rwe__dialog"
+          aria-label="Insert table"
+          onSubmit={(event) => {
+            event.preventDefault();
+            insertTable(Number(tableRows), Number(tableColumns));
+          }}
+        >
+          <label>
+            Rows
+            <input
+              autoFocus
+              type="number"
+              min="1"
+              max="20"
+              step="1"
+              required
+              value={tableRows}
+              onChange={(event) => setTableRows(event.target.value)}
+            />
+          </label>
+          <label>
+            Columns
+            <input
+              type="number"
+              min="1"
+              max="10"
+              step="1"
+              required
+              value={tableColumns}
+              onChange={(event) => setTableColumns(event.target.value)}
+            />
+          </label>
+          <div className="rwe__dialog-actions">
+            <button type="button" onClick={() => setDialog(null)}>Cancel</button>
+            <button type="submit">Insert table</button>
+          </div>
+        </form>
+      )}
+      <div
+        ref={editorRef}
+        className="rwe__content"
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-label={ariaLabel}
+        aria-multiline="true"
+        data-placeholder={placeholder}
+        onInput={(event) => onChange(event.currentTarget.innerHTML)}
+        onKeyDown={handleKeyDown}
+        onKeyUp={saveSelection}
+        onMouseUp={saveSelection}
+        onBlur={saveSelection}
+      />
+    </div>
+  );
+}

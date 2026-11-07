@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-ssr/
+
+*.local
+*.tsbuildinfo
+*.log
+npm-debug.log*
+
+.env*
+!.env.example
+
+.DS_Store
+Thumbs.db

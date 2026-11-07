@@ -1,0 +1,34 @@
+{
+  "name": "react-wysiwyg",
+  "version": "0.1.0",
+  "description": "A lightweight WYSIWYG editor component for React",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/react-wysiwyg.umd.cjs",
+  "module": "./dist/react-wysiwyg.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/react-wysiwyg.js",
+      "require": "./dist/react-wysiwyg.umd.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.0"
+  }
+}

@@ -1,0 +1,4 @@
+import './style.css';
+
+export { RichTextEditor } from './RichTextEditor';
+export type { RichTextEditorProps } from './RichTextEditor';

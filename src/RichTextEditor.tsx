@@ -280,7 +280,8 @@ export function RichTextEditor({
   const [imageFrame, setImageFrame] = useState<ImageFrame | null>(null);
   const [selectedCell, setSelectedCell] = useState<HTMLTableCellElement | null>(null);
   const [toolbarFormat, setToolbarFormat] = useState(initialToolbarFormat);
-  const [customFontSizeDraft, setCustomFontSizeDraft] = useState('');
+  const [customFontSizeDraft, setCustomFontSizeDraft] = useState<string | null>(null);
+  const [customLineSpacingDraft, setCustomLineSpacingDraft] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
@@ -466,6 +467,19 @@ export function RichTextEditor({
       onChange(editorRef.current.innerHTML);
       syncToolbarFormat();
     }
+  };
+
+  const readNonNegativeNumber = (input: HTMLInputElement) => {
+    const value = input.value.trim();
+    const number = Number(value);
+    if (!value || !Number.isFinite(number) || number < 0) {
+      input.setCustomValidity('Enter a valid non-negative number.');
+      input.reportValidity();
+      return null;
+    }
+
+    input.setCustomValidity('');
+    return number;
   };
 
   const runCommand = (command: EditorCommand, commandValue?: string) => {
@@ -1240,25 +1254,28 @@ export function RichTextEditor({
           <input
             className="rwe__custom-number"
             aria-label="Custom font size in pixels"
-            title="Enter a size from 8 to 96 pixels, then press Enter"
-            type="number"
-            required
+            title="Enter a font size, then press Enter"
+            type="text"
+            inputMode="decimal"
             disabled={isSourceEditing}
-            min="8"
-            max="96"
-            step="0.5"
             placeholder="px"
-            value={customFontSizeDraft || (fontSizePreset ? '' : toolbarFormat.fontSize)}
+            value={customFontSizeDraft ?? (fontSizePreset ? '' : toolbarFormat.fontSize)}
             onMouseDown={saveSelection}
-            onChange={(event) => setCustomFontSizeDraft(event.target.value)}
-            onBlur={() => setCustomFontSizeDraft('')}
+            onChange={(event) => {
+              event.currentTarget.setCustomValidity('');
+              setCustomFontSizeDraft(event.target.value);
+            }}
+            onBlur={(event) => {
+              event.currentTarget.setCustomValidity('');
+              setCustomFontSizeDraft(null);
+            }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();
-              if (!event.currentTarget.reportValidity()) return;
-              const fontSize = event.currentTarget.value;
+              const fontSize = readNonNegativeNumber(event.currentTarget);
+              if (fontSize === null) return;
               applyInlineStyle('fontSize', `${fontSize}px`);
-              setCustomFontSizeDraft('');
+              setCustomFontSizeDraft(null);
             }}
           />
           <select
@@ -1279,24 +1296,28 @@ export function RichTextEditor({
           <input
             className="rwe__custom-number"
             aria-label="Custom line spacing"
-            title="Enter a multiplier from 0.8 to 3, then press Enter"
-            type="number"
-            required
+            title="Enter a line-spacing multiplier, then press Enter"
+            type="text"
+            inputMode="decimal"
             disabled={isSourceEditing}
-            min="0.8"
-            max="3"
-            step="0.05"
             placeholder="×"
-            value={lineSpacingPreset ? '' : toolbarFormat.lineSpacing}
+            value={customLineSpacingDraft ?? (lineSpacingPreset ? '' : toolbarFormat.lineSpacing)}
             onMouseDown={saveSelection}
             onChange={(event) => {
-              setToolbarFormat((current) => ({ ...current, lineSpacing: event.target.value }));
+              event.currentTarget.setCustomValidity('');
+              setCustomLineSpacingDraft(event.target.value);
+            }}
+            onBlur={(event) => {
+              event.currentTarget.setCustomValidity('');
+              setCustomLineSpacingDraft(null);
             }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();
-              if (!event.currentTarget.reportValidity()) return;
-              applyLineSpacing(event.currentTarget.value);
+              const lineSpacing = readNonNegativeNumber(event.currentTarget);
+              if (lineSpacing === null) return;
+              applyLineSpacing(String(lineSpacing));
+              setCustomLineSpacingDraft(null);
             }}
           />
         </div>

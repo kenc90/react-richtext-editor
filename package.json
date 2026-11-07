@@ -14,8 +14,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/react-wysiwyg.js",
       "require": "./dist/react-wysiwyg.umd.cjs"
-    },
-    "./style.css": "./dist/style.css"
+    }
   },
   "scripts": {
     "dev": "vite",

@@ -15,7 +15,6 @@ GitHub installs build the package automatically before installation.
 ```tsx
 import { useState } from 'react';
 import { RichTextEditor } from 'react-wysiwyg';
-import 'react-wysiwyg/style.css';
 
 function Example() {
   const [html, setHtml] = useState('<p>Write something...</p>');
@@ -23,6 +22,8 @@ function Example() {
   return <RichTextEditor value={html} onChange={setHtml} />;
 }
 ```
+
+The default styles are included and injected when the package is imported; no separate CSS import is required.
 
 `value` and `onChange` use an HTML string. Use **Edit HTML** in the toolbar to edit the source directly; switch back to the visual editor to see the rendered result. The toolbar supports headings, blockquotes, code blocks and inline code, bold, italic, underline, strikethrough, lists, links, tables, horizontal rules, alignment, indentation, text color, highlighting, undo/redo, and clear formatting. Markdown shortcuts are available for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) followed by a space.
 

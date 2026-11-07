@@ -1,0 +1,121 @@
+.rwe-demo__feature-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.rwe-demo__feature-toolbar button,
+.rwe-demo__feature-actions button,
+.rwe-demo__feature-footer button {
+  background: #2563eb;
+  border: 1px solid #2563eb;
+  border-radius: 0.375rem;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.75rem;
+}
+
+.rwe-demo__feature-toolbar span {
+  color: #475569;
+  font-size: 0.875rem;
+}
+
+.rwe-demo__feature-dialog {
+  border: 0;
+  border-radius: 0.75rem;
+  box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 25%);
+  box-sizing: border-box;
+  color: #0f172a;
+  max-height: min(85vh, 52rem);
+  max-width: calc(100vw - 2rem);
+  overflow: auto;
+  padding: 1.25rem;
+  width: 48rem;
+}
+
+.rwe-demo__feature-dialog::backdrop {
+  background: rgb(15 23 42 / 55%);
+}
+
+.rwe-demo__feature-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rwe-demo__feature-header h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.rwe-demo__feature-header p {
+  color: #475569;
+  margin: 0.375rem 0 0;
+}
+
+.rwe-demo__feature-close {
+  background: transparent;
+  border: 0;
+  border-radius: 0.25rem;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.125rem 0.375rem;
+}
+
+.rwe-demo__feature-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.rwe-demo__feature-actions button:last-child {
+  background: #fff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.rwe-demo__feature-groups {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.rwe-demo__feature-groups fieldset {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem;
+}
+
+.rwe-demo__feature-groups legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+
+.rwe-demo__feature-groups label {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  gap: 0.5rem;
+}
+
+.rwe-demo__feature-groups input {
+  accent-color: #2563eb;
+  margin: 0;
+}
+
+.rwe-demo__feature-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}

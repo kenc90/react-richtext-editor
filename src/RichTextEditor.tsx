@@ -318,7 +318,7 @@ export function RichTextEditor({
   value,
   onChange,
   features: featureOverrides,
-  placeholder = 'Start writing…',
+  placeholder,
   ariaLabel = 'Rich text editor',
   className,
 }: RichTextEditorProps) {

@@ -19,13 +19,22 @@ import { useState } from 'react';
 import { RichTextEditor } from 'react-wysiwyg';
 
 function Example() {
-  const [html, setHtml] = useState('<p>Write something...</p>');
+  const [html, setHtml] = useState('');
 
-  return <RichTextEditor value={html} onChange={setHtml} />;
+  return (
+    <RichTextEditor
+      value={html}
+      onChange={setHtml}
+      placeholder="Start writing your article..."
+      ariaLabel="Article body editor"
+    />
+  );
 }
 ```
 
-The default styles are included and injected when the package is imported; no separate CSS import is required.
+`placeholder` is optional and has no default; it is shown while the editor is empty only when provided. The default styles are included and injected when the package is imported; no separate CSS import is required.
+
+`ariaLabel` is optional and defaults to `Rich text editor`; customize it to give the editable textbox an accessible name.
 
 ## Choosing features
 

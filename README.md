@@ -91,7 +91,8 @@ Treat editor HTML as untrusted input when rendering or storing content from user
 
 ```sh
 npm install
+npm run dev
 npm run build
 ```
 
-To update the demo for GitHub Pages configured to deploy from the `main` branch root, run `npm run build:demo` and commit the generated root `index.html` and `assets/` files. No GitHub Action is required.
+`npm run dev` starts the local demo. The GitHub Pages workflow builds and deploys the demo automatically on pushes to `main`; no generated demo files need to be committed. Set the repository's Pages source to **GitHub Actions** in **Settings → Pages**.

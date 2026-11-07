@@ -7,7 +7,7 @@ export default defineConfig(({ command }) => ({
   root: demoRoot,
   base: command === 'build' ? '/react-wysiwyg/' : '/',
   build: {
-    outDir: '..',
-    emptyOutDir: false,
+    outDir: '../demo-dist',
+    emptyOutDir: true,
   },
 }));

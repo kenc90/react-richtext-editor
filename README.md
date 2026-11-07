@@ -2,6 +2,8 @@
 
 A lightweight WYSIWYG editor component for React.
 
+[Live demo](https://kenc90.github.io/react-wysiwyg/)
+
 ## Install
 
 ```sh
@@ -37,3 +39,5 @@ Treat editor HTML as untrusted input when rendering or storing content from user
 npm install
 npm run build
 ```
+
+The GitHub Pages demo is built with `npm run build:demo`. The Pages workflow deploys it when changes are pushed to `main`. Enable **Settings → Pages → Build and deployment → GitHub Actions** in the repository to publish it.

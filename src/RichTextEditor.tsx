@@ -81,6 +81,42 @@ type FormatSnapshot = {
   textAlign: string;
 };
 
+type ToolbarFormatState = {
+  blockFormat: string;
+  fontFamily: string;
+  fontSize: string;
+  lineSpacing: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strikeThrough: boolean;
+  subscript: boolean;
+  superscript: boolean;
+  bulletedList: boolean;
+  numberedList: boolean;
+  textAlign: string;
+  textColor: string;
+  highlightColor: string;
+};
+
+const initialToolbarFormat: ToolbarFormatState = {
+  blockFormat: '<p>',
+  fontFamily: '',
+  fontSize: '',
+  lineSpacing: '',
+  bold: false,
+  italic: false,
+  underline: false,
+  strikeThrough: false,
+  subscript: false,
+  superscript: false,
+  bulletedList: false,
+  numberedList: false,
+  textAlign: 'left',
+  textColor: '#0f172a',
+  highlightColor: '#fff176',
+};
+
 type DialogType = 'link' | 'image' | 'table' | 'table-tools';
 type ImageFrame = { top: number; left: number; width: number; height: number };
 type ImageResizeStart = { image: HTMLImageElement; pointerX: number; width: number };
@@ -198,6 +234,20 @@ function escapeHtml(value: string) {
   });
 }
 
+function colorToHex(value: string, fallback: string) {
+  const context = document.createElement('canvas').getContext('2d');
+  if (!context) return fallback;
+  context.fillStyle = '#000000';
+  context.fillStyle = value;
+  const normalized = context.fillStyle;
+  if (/^#[\da-f]{6}$/i.test(normalized)) return normalized;
+  const channels = normalized.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (!channels) return fallback;
+  return `#${channels.slice(1, 4).map((channel) => (
+    Number(channel).toString(16).padStart(2, '0')
+  )).join('')}`;
+}
+
 function isSimpleTable(table: HTMLTableElement) {
   const rows = Array.from(table.rows);
   const columnCount = rows[0]?.cells.length ?? 0;
@@ -229,12 +279,84 @@ export function RichTextEditor({
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
   const [imageFrame, setImageFrame] = useState<ImageFrame | null>(null);
   const [selectedCell, setSelectedCell] = useState<HTMLTableCellElement | null>(null);
+  const [toolbarFormat, setToolbarFormat] = useState(initialToolbarFormat);
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
   const [imageUrlError, setImageUrlError] = useState('');
   const [tableRows, setTableRows] = useState('3');
   const [tableColumns, setTableColumns] = useState('3');
+
+  const syncToolbarFormat = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const selection = window.getSelection();
+    const liveRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const range = liveRange && editor.contains(liveRange.commonAncestorContainer)
+      ? liveRange
+      : selectionRef.current && editor.contains(selectionRef.current.commonAncestorContainer)
+        ? selectionRef.current
+        : null;
+    if (!range) {
+      setToolbarFormat(initialToolbarFormat);
+      return;
+    }
+
+    let node: Node = range.startContainer;
+    if (node.nodeType === Node.ELEMENT_NODE && node.childNodes.length) {
+      node = node.childNodes.item(range.startOffset)
+        ?? node.childNodes.item(range.startOffset - 1)
+        ?? node;
+    }
+    const element = node.nodeType === Node.ELEMENT_NODE
+      ? node as HTMLElement
+      : node.parentElement ?? editor;
+    const block = element.closest<HTMLElement>(
+      'p,h1,h2,h3,h4,h5,h6,blockquote,pre,li,div,td,th',
+    );
+    const style = window.getComputedStyle(element);
+    const blockStyle = block ? window.getComputedStyle(block) : style;
+    const blockTag = block?.tagName.toLowerCase() ?? 'p';
+    const blockFormat = blockFormats.some(({ value: format }) => (
+      format.toLowerCase() === `<${blockTag}>`
+    ))
+      ? `<${blockTag}>`
+      : '';
+    const fontFamily = style.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
+    const fontSize = String(Number.parseFloat(style.fontSize) || '');
+    const computedLineHeight = blockStyle.lineHeight;
+    const lineHeightPixels = Number.parseFloat(computedLineHeight);
+    const blockFontSize = Number.parseFloat(blockStyle.fontSize);
+    const lineSpacing = computedLineHeight === 'normal' || !Number.isFinite(lineHeightPixels)
+      ? ''
+      : String(Number((lineHeightPixels / blockFontSize).toFixed(2)));
+    const weight = Number.parseInt(style.fontWeight, 10);
+    const decoration = `${style.textDecorationLine} ${style.textDecoration}`;
+    const backgroundColor = style.backgroundColor;
+    const transparentBackground = backgroundColor === 'transparent'
+      || backgroundColor === 'rgba(0, 0, 0, 0)';
+
+    setToolbarFormat({
+      blockFormat,
+      fontFamily,
+      fontSize,
+      lineSpacing,
+      bold: style.fontWeight === 'bold' || weight >= 600,
+      italic: style.fontStyle === 'italic' || style.fontStyle === 'oblique',
+      underline: decoration.includes('underline'),
+      strikeThrough: decoration.includes('line-through'),
+      subscript: element.closest('sub') !== null || style.verticalAlign === 'sub',
+      superscript: element.closest('sup') !== null || style.verticalAlign === 'super',
+      bulletedList: element.closest('ul') !== null,
+      numberedList: element.closest('ol') !== null,
+      textAlign: blockStyle.textAlign,
+      textColor: colorToHex(style.color, initialToolbarFormat.textColor),
+      highlightColor: transparentBackground
+        ? initialToolbarFormat.highlightColor
+        : colorToHex(backgroundColor, initialToolbarFormat.highlightColor),
+    });
+  };
 
   const getImageFrame = (image: HTMLImageElement): ImageFrame | null => {
     const container = editorRef.current?.parentElement;
@@ -262,13 +384,16 @@ export function RichTextEditor({
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (editor && editor.innerHTML !== value) {
-      editor.innerHTML = value;
-      selectionRef.current = null;
-      pendingInlineStyleRef.current = null;
-      setSelectedImage(null);
-      setImageFrame(null);
-      setSelectedCell(null);
+    if (editor) {
+      if (editor.innerHTML !== value) {
+        editor.innerHTML = value;
+        selectionRef.current = null;
+        pendingInlineStyleRef.current = null;
+        setSelectedImage(null);
+        setImageFrame(null);
+        setSelectedCell(null);
+      }
+      syncToolbarFormat();
     }
   }, [value]);
 
@@ -336,7 +461,10 @@ export function RichTextEditor({
   };
 
   const emitChange = () => {
-    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    if (editorRef.current) {
+      onChange(editorRef.current.innerHTML);
+      syncToolbarFormat();
+    }
   };
 
   const runCommand = (command: EditorCommand, commandValue?: string) => {
@@ -404,14 +532,28 @@ export function RichTextEditor({
       selection.addRange(range);
       selectionRef.current = range.cloneRange();
       pendingInlineStyleRef.current = marker;
+      syncToolbarFormat();
       return;
     }
+
+    const reusableSpans = Array.from(editor.querySelectorAll<HTMLElement>('span')).filter((span) => {
+      if (!range.intersectsNode(span)) return false;
+      const spanRange = document.createRange();
+      spanRange.selectNodeContents(span);
+      const fullySelected = range.compareBoundaryPoints(Range.START_TO_START, spanRange) <= 0
+        && range.compareBoundaryPoints(Range.END_TO_END, spanRange) >= 0;
+      if (fullySelected) span.style[property] = value;
+      return fullySelected;
+    });
 
     const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
     const segments: Array<{ node: Text; start: number; end: number }> = [];
     let node = walker.nextNode() as Text | null;
     while (node) {
-      if (range.intersectsNode(node)) {
+      if (
+        range.intersectsNode(node)
+        && !reusableSpans.some((span) => span.contains(node))
+      ) {
         const start = range.startContainer === node ? range.startOffset : 0;
         const end = range.endContainer === node ? range.endOffset : node.length;
         if (end > start) segments.push({ node, start, end });
@@ -430,13 +572,17 @@ export function RichTextEditor({
       spans.push(span);
     }
 
-    if (!spans.length) return;
-    const updatedRange = document.createRange();
-    updatedRange.setStartBefore(spans[0]);
-    updatedRange.setEndAfter(spans[spans.length - 1]);
-    selection.removeAllRanges();
-    selection.addRange(updatedRange);
-    selectionRef.current = updatedRange.cloneRange();
+    if (!spans.length && !reusableSpans.length) return;
+    if (spans.length) {
+      const updatedRange = document.createRange();
+      updatedRange.setStartBefore(spans[0]);
+      updatedRange.setEndAfter(spans[spans.length - 1]);
+      selection.removeAllRanges();
+      selection.addRange(updatedRange);
+      selectionRef.current = updatedRange.cloneRange();
+    } else {
+      selectionRef.current = range.cloneRange();
+    }
     emitChange();
   };
 
@@ -610,6 +756,7 @@ export function RichTextEditor({
 
   const handleEditorSelection = () => {
     saveSelection();
+    syncToolbarFormat();
     if (isFormatPainterActive) pasteFormatting();
   };
 
@@ -910,6 +1057,8 @@ export function RichTextEditor({
   };
 
   const handleEditorClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    saveSelection();
+    syncToolbarFormat();
     if (!(event.target instanceof Element)) return;
     if (pendingInlineStyleRef.current && !pendingInlineStyleRef.current.contains(event.target)) {
       clearPendingInlineStyle();
@@ -933,9 +1082,9 @@ export function RichTextEditor({
     setSelectedCell(null);
   };
 
-  const handleEditorInput = (event: React.FormEvent<HTMLDivElement>) => {
+  const handleEditorInput = () => {
     clearPendingInlineStyle();
-    onChange(event.currentTarget.innerHTML);
+    emitChange();
   };
 
   const insertInlineCode = () => {
@@ -1011,6 +1160,17 @@ export function RichTextEditor({
 
   const selectedTable = selectedCell?.closest('table') ?? null;
   const selectedTableIsSimple = selectedTable ? isSimpleTable(selectedTable) : false;
+  const fontSizePreset = fontSizes.find(({ value: size }) => (
+    Number.parseFloat(size) === Number.parseFloat(toolbarFormat.fontSize)
+  ))?.value ?? '';
+  const lineSpacingPreset = lineSpacings.some(({ value }) => (
+    value === toolbarFormat.lineSpacing
+  ))
+    ? toolbarFormat.lineSpacing
+    : '';
+  const fontFamilyIsPreset = fontFamilies.some(({ value: font }) => (
+    font.toLowerCase() === toolbarFormat.fontFamily.toLowerCase()
+  ));
 
   return (
     <div className={['rwe', className].filter(Boolean).join(' ')}>
@@ -1019,16 +1179,15 @@ export function RichTextEditor({
           <select
             className="rwe__select"
             aria-label="Block format"
-            defaultValue=""
+            value={toolbarFormat.blockFormat}
             disabled={isSourceEditing}
             onMouseDown={saveSelection}
             onChange={(event) => {
               if (event.target.value) runCommand('formatBlock', event.target.value);
-              event.target.value = '';
             }}
           >
-            <option value="" disabled>Paragraph</option>
-            {blockFormats.slice(1).map(({ value: format, label }) => (
+            <option value="" disabled>Block</option>
+            {blockFormats.map(({ value: format, label }) => (
               <option key={format} value={format}>{label}</option>
             ))}
           </select>
@@ -1037,15 +1196,17 @@ export function RichTextEditor({
           <select
             className="rwe__select"
             aria-label="Font family"
-            defaultValue=""
+            value={toolbarFormat.fontFamily}
             disabled={isSourceEditing}
             onMouseDown={saveSelection}
             onChange={(event) => {
-            if (event.target.value) applyInlineStyle('fontFamily', event.target.value);
-              event.target.value = '';
+              if (event.target.value) applyInlineStyle('fontFamily', event.target.value);
             }}
           >
             <option value="" disabled>Font</option>
+            {toolbarFormat.fontFamily && !fontFamilyIsPreset && (
+              <option value={toolbarFormat.fontFamily}>{toolbarFormat.fontFamily}</option>
+            )}
             {fontFamilies.map(({ value: font, label }) => (
               <option key={font} value={font}>{label}</option>
             ))}
@@ -1053,12 +1214,11 @@ export function RichTextEditor({
           <select
             className="rwe__select"
             aria-label="Font size"
-            defaultValue=""
+            value={fontSizePreset}
             disabled={isSourceEditing}
             onMouseDown={saveSelection}
             onChange={(event) => {
               if (event.target.value) applyInlineStyle('fontSize', event.target.value);
-              event.target.value = '';
             }}
           >
             <option value="" disabled>Size</option>
@@ -1072,28 +1232,31 @@ export function RichTextEditor({
             title="Enter a size from 8 to 96 pixels, then press Enter"
             type="number"
             required
+            disabled={isSourceEditing}
             min="8"
             max="96"
-            step="1"
+            step="0.5"
             placeholder="px"
+            value={fontSizePreset ? '' : toolbarFormat.fontSize}
             onMouseDown={saveSelection}
+            onChange={(event) => {
+              setToolbarFormat((current) => ({ ...current, fontSize: event.target.value }));
+            }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();
               if (!event.currentTarget.reportValidity()) return;
               applyInlineStyle('fontSize', `${event.currentTarget.value}px`);
-              event.currentTarget.value = '';
             }}
           />
           <select
             className="rwe__select"
             aria-label="Line spacing"
-            defaultValue=""
+            value={lineSpacingPreset}
             disabled={isSourceEditing}
             onMouseDown={saveSelection}
             onChange={(event) => {
               if (event.target.value) applyLineSpacing(event.target.value);
-              event.target.value = '';
             }}
           >
             <option value="" disabled>Spacing</option>
@@ -1107,42 +1270,46 @@ export function RichTextEditor({
             title="Enter a multiplier from 0.8 to 3, then press Enter"
             type="number"
             required
+            disabled={isSourceEditing}
             min="0.8"
             max="3"
             step="0.05"
             placeholder="×"
+            value={lineSpacingPreset ? '' : toolbarFormat.lineSpacing}
             onMouseDown={saveSelection}
+            onChange={(event) => {
+              setToolbarFormat((current) => ({ ...current, lineSpacing: event.target.value }));
+            }}
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();
               if (!event.currentTarget.reportValidity()) return;
               applyLineSpacing(event.currentTarget.value);
-              event.currentTarget.value = '';
             }}
           />
         </div>
         <div className="rwe__group">
-          {button('Bold', 'bold', () => runCommand('bold'), 'Ctrl+B')}
-          {button('Italic', 'italic', () => runCommand('italic'), 'Ctrl+I')}
-          {button('Underline', 'underline', () => runCommand('underline'))}
-          {button('Strikethrough', 'strike', () => runCommand('strikeThrough'))}
-          {button('Subscript', 'subscript', () => runCommand('subscript'))}
-          {button('Superscript', 'superscript', () => runCommand('superscript'))}
+          {button('Bold', 'bold', () => runCommand('bold'), 'Ctrl+B', false, toolbarFormat.bold)}
+          {button('Italic', 'italic', () => runCommand('italic'), 'Ctrl+I', false, toolbarFormat.italic)}
+          {button('Underline', 'underline', () => runCommand('underline'), undefined, false, toolbarFormat.underline)}
+          {button('Strikethrough', 'strike', () => runCommand('strikeThrough'), undefined, false, toolbarFormat.strikeThrough)}
+          {button('Subscript', 'subscript', () => runCommand('subscript'), undefined, false, toolbarFormat.subscript)}
+          {button('Superscript', 'superscript', () => runCommand('superscript'), undefined, false, toolbarFormat.superscript)}
           {button('Inline code', 'code', insertInlineCode)}
           {button('Clear formatting', 'clear', () => runCommand('removeFormat'))}
         </div>
         <div className="rwe__group">
-          {button('Bulleted list', 'bulletedList', () => runCommand('insertUnorderedList'))}
-          {button('Numbered list', 'numberedList', () => runCommand('insertOrderedList'))}
+          {button('Bulleted list', 'bulletedList', () => runCommand('insertUnorderedList'), undefined, false, toolbarFormat.bulletedList)}
+          {button('Numbered list', 'numberedList', () => runCommand('insertOrderedList'), undefined, false, toolbarFormat.numberedList)}
           {button('Insert table', 'table', (event) => openDialog('table', event.currentTarget))}
           {button('Insert image', 'image', (event) => openImageDialog(event.currentTarget))}
           {button('Horizontal rule', 'rule', () => runCommand('insertHorizontalRule'))}
         </div>
         <div className="rwe__group">
-          {button('Align left', 'alignLeft', () => runCommand('justifyLeft'))}
-          {button('Align center', 'alignCenter', () => runCommand('justifyCenter'))}
-          {button('Align right', 'alignRight', () => runCommand('justifyRight'))}
-          {button('Justify', 'justify', () => runCommand('justifyFull'))}
+          {button('Align left', 'alignLeft', () => runCommand('justifyLeft'), undefined, false, ['left', 'start'].includes(toolbarFormat.textAlign))}
+          {button('Align center', 'alignCenter', () => runCommand('justifyCenter'), undefined, false, toolbarFormat.textAlign === 'center')}
+          {button('Align right', 'alignRight', () => runCommand('justifyRight'), undefined, false, ['right', 'end'].includes(toolbarFormat.textAlign))}
+          {button('Justify', 'justify', () => runCommand('justifyFull'), undefined, false, toolbarFormat.textAlign === 'justify')}
           {button('Decrease indent', 'outdent', () => runCommand('outdent'))}
           {button('Increase indent', 'indent', () => runCommand('indent'))}
         </div>
@@ -1159,7 +1326,7 @@ export function RichTextEditor({
             <input
               aria-label="Text color"
               type="color"
-              defaultValue="#0f172a"
+              value={toolbarFormat.textColor}
               disabled={isSourceEditing}
               onMouseDown={saveSelection}
               onChange={(event) => runCommand('foreColor', event.target.value)}
@@ -1170,7 +1337,7 @@ export function RichTextEditor({
             <input
               aria-label="Highlight color"
               type="color"
-              defaultValue="#fff176"
+              value={toolbarFormat.highlightColor}
               disabled={isSourceEditing}
               onMouseDown={saveSelection}
               onChange={(event) => runCommand('hiliteColor', event.target.value)}

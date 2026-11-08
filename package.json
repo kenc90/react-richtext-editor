@@ -1,11 +1,14 @@
 {
-  "name": "react-richtext-editor",
+  "name": "@kenc90/react-richtext-editor",
   "version": "0.1.0",
   "description": "A lightweight WYSIWYG editor component for React",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/kenc90/react-richtext-editor.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "type": "module",
   "files": [

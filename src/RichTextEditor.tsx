@@ -5,6 +5,7 @@ export interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   features?: RichTextEditorFeatures;
+  markdownShortcuts?: boolean;
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
@@ -319,6 +320,7 @@ export function RichTextEditor({
   value,
   onChange,
   features: featureOverrides,
+  markdownShortcuts = false,
   placeholder,
   ariaLabel = 'Rich text editor',
   className,
@@ -1375,7 +1377,7 @@ export function RichTextEditor({
       return;
     }
 
-    if (event.key !== ' ') return;
+    if (!markdownShortcuts || event.key !== ' ') return;
 
     const selection = window.getSelection();
     const editor = editorRef.current;

@@ -29,6 +29,7 @@ function Example() {
       onChange={setHtml}
       placeholder="Start writing your article..."
       ariaLabel="Article body editor"
+      markdownShortcuts
     />
   );
 }
@@ -38,9 +39,11 @@ function Example() {
 
 `ariaLabel` is optional and defaults to `Rich text editor`; customize it to give the editable textbox an accessible name.
 
+`markdownShortcuts` is optional and defaults to `false`. Set it to `true` to enable Markdown shortcuts for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) when followed by a space.
+
 ## Choosing features
 
-All editor features are enabled by default. Pass `features` to hide controls and disable their associated keyboard and Markdown shortcuts; unspecified options remain enabled:
+All editor features are enabled by default. Pass `features` to hide controls and disable their associated keyboard shortcuts; unspecified options remain enabled:
 
 ```tsx
 <RichTextEditor
@@ -86,7 +89,7 @@ Pass `className` to add a class to the editor's outer element, then override the
 
 Useful selectors include `.rwe__toolbar`, `.rwe__group`, `.rwe__button`, `.rwe__select`, `.rwe__content`, and `.rwe__source`. Add your override stylesheet to the consuming app; the editor's default styles remain included automatically.
 
-`value` and `onChange` use an HTML string. Use **Edit HTML** in the toolbar to edit the source directly; switch back to the visual editor to see the rendered result. To copy formatting, select the source text and click **Format painter**, then select the target text; the styling and alignment are applied to that selection. The toolbar also supports headings, blockquotes, code blocks and inline code, bold, italic, underline, strikethrough, lists, links, URL-based image insertion with optional alt text, tables, horizontal rules, alignment, indentation, font family and size, line spacing, text color, highlighting, undo/redo, and clear formatting. Markdown shortcuts are available for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) followed by a space.
+`value` and `onChange` use an HTML string. Use **Edit HTML** in the toolbar to edit the source directly; switch back to the visual editor to see the rendered result. To copy formatting, select the source text and click **Format painter**, then select the target text; the styling and alignment are applied to that selection. The toolbar also supports headings, blockquotes, code blocks and inline code, bold, italic, underline, strikethrough, lists, links, URL-based image insertion with optional alt text, tables, horizontal rules, alignment, indentation, font family and size, line spacing, text color, highlighting, undo/redo, and clear formatting.
 
 The block-format menu includes **Normal text** (`<div>`) as well as paragraphs and headings. A `<span>` is inline rather than a block format, so normal text uses a `<div>` wrapper.
 

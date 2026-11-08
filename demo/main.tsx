@@ -66,6 +66,7 @@ function Demo() {
     '<h2>Try the editor</h2><p>Select text and try the toolbar, or type <strong>#</strong>, <strong>&gt;</strong>, <strong>-</strong>, or <strong>1.</strong> followed by a space for a Markdown shortcut.</p>',
   );
   const [features, setFeatures] = useState<RichTextEditorFeatures>({});
+  const [markdownShortcuts, setMarkdownShortcuts] = useState(false);
   const [isFeatureDialogOpen, setIsFeatureDialogOpen] = useState(false);
   const featureDialogRef = useRef<HTMLDialogElement>(null);
   const disabledFeatureCount = Object.values(features).filter((enabled) => enabled === false).length;
@@ -85,8 +86,21 @@ function Demo() {
           Configure editor features
         </button>
         <span>{disabledFeatureCount} disabled</span>
+        <label className="rwe-demo__shortcut-toggle">
+          <input
+            type="checkbox"
+            checked={markdownShortcuts}
+            onChange={(event) => setMarkdownShortcuts(event.target.checked)}
+          />
+          Markdown shortcuts
+        </label>
       </div>
-      <RichTextEditor value={value} onChange={setValue} features={features} />
+      <RichTextEditor
+        value={value}
+        onChange={setValue}
+        features={features}
+        markdownShortcuts={markdownShortcuts}
+      />
       <dialog
         ref={featureDialogRef}
         className="rwe-demo__feature-dialog"

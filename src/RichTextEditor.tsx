@@ -93,6 +93,7 @@ type EditorCommand =
   | 'removeFormat';
 
 const blockFormats = [
+  { value: '<div>', label: 'Normal text' },
   { value: '<p>', label: 'Paragraph' },
   { value: '<h1>', label: 'Heading 1' },
   { value: '<h2>', label: 'Heading 2' },

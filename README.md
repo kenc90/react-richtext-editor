@@ -88,6 +88,8 @@ Useful selectors include `.rwe__toolbar`, `.rwe__group`, `.rwe__button`, `.rwe__
 
 `value` and `onChange` use an HTML string. Use **Edit HTML** in the toolbar to edit the source directly; switch back to the visual editor to see the rendered result. To copy formatting, select the source text and click **Format painter**, then select the target text; the styling and alignment are applied to that selection. The toolbar also supports headings, blockquotes, code blocks and inline code, bold, italic, underline, strikethrough, lists, links, URL-based image insertion with optional alt text, tables, horizontal rules, alignment, indentation, font family and size, line spacing, text color, highlighting, undo/redo, and clear formatting. Markdown shortcuts are available for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) followed by a space.
 
+The block-format menu includes **Normal text** (`<div>`) as well as paragraphs and headings. A `<span>` is inline rather than a block format, so normal text uses a `<div>` wrapper.
+
 Font size and line spacing have presets plus custom numeric inputs with no hard-coded size or multiplier bounds. Enter a non-negative number and press Enter to apply it to selected text. With just a caret, font styling applies to subsequent typing and line spacing applies to the current block.
 
 Pasting rich HTML keeps supported formatting while removing Word/Google-specific markup and unsafe attributes. Plain-text pasting continues to use the browser's native behavior.

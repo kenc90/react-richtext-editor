@@ -30,6 +30,7 @@ function Example() {
       placeholder="Start writing your article..."
       ariaLabel="Article body editor"
       markdownShortcuts
+      theme="system"
     />
   );
 }
@@ -40,6 +41,8 @@ function Example() {
 `ariaLabel` is optional and defaults to `Rich text editor`; customize it to give the editable textbox an accessible name.
 
 `markdownShortcuts` is optional and defaults to `false`. Set it to `true` to enable Markdown shortcuts for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) when followed by a space.
+
+`theme` accepts `system`, `light`, or `dark` and defaults to `system`, which follows the operating system's color-scheme preference. When dark mode is active, the editor's root element receives the `rwe--dark` class. Override the `--rwe-*` CSS variables or target that class to customize dark mode styles.
 
 ## Choosing features
 
@@ -73,8 +76,16 @@ Pass `className` to add a class to the editor's outer element, then override the
   border-radius: 0.75rem;
 }
 
+.article-editor.rwe--dark {
+  --rwe-editor-background: #111827;
+  --rwe-toolbar-background: #1f2937;
+  --rwe-surface: #1f2937;
+  --rwe-text: #f9fafb;
+  --rwe-border: #475569;
+}
+
 .article-editor .rwe__toolbar {
-  background: #f1f5f9;
+  background: var(--rwe-toolbar-background);
 }
 
 .article-editor .rwe__content {
@@ -83,7 +94,7 @@ Pass `className` to add a class to the editor's outer element, then override the
 }
 
 .article-editor .rwe__button:hover {
-  background: #dbeafe;
+  background: var(--rwe-hover-background);
 }
 ```
 

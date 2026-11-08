@@ -6,10 +6,13 @@ export interface RichTextEditorProps {
   onChange: (value: string) => void;
   features?: RichTextEditorFeatures;
   markdownShortcuts?: boolean;
+  theme?: RichTextEditorTheme;
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
 }
+
+export type RichTextEditorTheme = 'system' | 'light' | 'dark';
 
 export interface RichTextEditorFeatures {
   blockFormat?: boolean;
@@ -472,6 +475,7 @@ export function RichTextEditor({
   onChange,
   features: featureOverrides,
   markdownShortcuts = false,
+  theme = 'system',
   placeholder,
   ariaLabel = 'Rich text editor',
   className,
@@ -496,6 +500,11 @@ export function RichTextEditor({
   const [dialogPosition, setDialogPosition] = useState({ top: 0, left: 0 });
   const [isSourceEditing, setIsSourceEditing] = useState(false);
   const [htmlSourceDraft, setHtmlSourceDraft] = useState(value);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() => (
+    typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches
+  ));
   const [isFormatPainterActive, setIsFormatPainterActive] = useState(false);
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
   const [imageFrame, setImageFrame] = useState<ImageFrame | null>(null);
@@ -509,6 +518,19 @@ export function RichTextEditor({
   const [imageUrlError, setImageUrlError] = useState('');
   const [tableRows, setTableRows] = useState('3');
   const [tableColumns, setTableColumns] = useState('3');
+  const isDarkTheme = theme === 'dark' || (theme === 'system' && systemPrefersDark);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleColorSchemeChange = (event: MediaQueryListEvent) => {
+      setSystemPrefersDark(event.matches);
+    };
+
+    setSystemPrefersDark(colorScheme.matches);
+    colorScheme.addEventListener('change', handleColorSchemeChange);
+    return () => colorScheme.removeEventListener('change', handleColorSchemeChange);
+  }, []);
 
   const syncToolbarFormat = () => {
     const editor = editorRef.current;
@@ -1615,7 +1637,7 @@ export function RichTextEditor({
   ));
 
   return (
-    <div className={['rwe', className].filter(Boolean).join(' ')}>
+    <div className={['rwe', isDarkTheme && 'rwe--dark', className].filter(Boolean).join(' ')}>
       <div className="rwe__toolbar" role="toolbar" aria-label="Text formatting">
         {features.blockFormat && (
         <div className="rwe__group">

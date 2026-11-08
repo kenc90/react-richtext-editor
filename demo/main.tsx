@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { RichTextEditor, type RichTextEditorFeatures } from '../src/RichTextEditor';
+import {
+  RichTextEditor,
+  type RichTextEditorFeatures,
+  type RichTextEditorTheme,
+} from '../src/RichTextEditor';
 import './demo.css';
 import '../src/style.css';
 
@@ -67,6 +71,7 @@ function Demo() {
   );
   const [features, setFeatures] = useState<RichTextEditorFeatures>({});
   const [markdownShortcuts, setMarkdownShortcuts] = useState(false);
+  const [theme, setTheme] = useState<RichTextEditorTheme>('system');
   const [isFeatureDialogOpen, setIsFeatureDialogOpen] = useState(false);
   const featureDialogRef = useRef<HTMLDialogElement>(null);
   const disabledFeatureCount = Object.values(features).filter((enabled) => enabled === false).length;
@@ -94,12 +99,30 @@ function Demo() {
           />
           Markdown shortcuts
         </label>
+        <label className="rwe-demo__theme-control">
+          Editor theme
+          <select
+            aria-label="Editor theme"
+            value={theme}
+            onChange={(event) => {
+              const nextTheme = event.target.value;
+              if (nextTheme === 'system' || nextTheme === 'light' || nextTheme === 'dark') {
+                setTheme(nextTheme);
+              }
+            }}
+          >
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
       </div>
       <RichTextEditor
         value={value}
         onChange={setValue}
         features={features}
         markdownShortcuts={markdownShortcuts}
+        theme={theme}
       />
       <dialog
         ref={featureDialogRef}

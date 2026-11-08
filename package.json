@@ -1,20 +1,24 @@
 {
-  "name": "react-wysiwyg",
+  "name": "react-richtext-editor",
   "version": "0.1.0",
   "description": "A lightweight WYSIWYG editor component for React",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenc90/react-richtext-editor.git"
+  },
   "type": "module",
   "files": [
     "dist"
   ],
-  "main": "./dist/react-wysiwyg.umd.cjs",
-  "module": "./dist/react-wysiwyg.js",
+  "main": "./dist/react-richtext-editor.umd.cjs",
+  "module": "./dist/react-richtext-editor.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/react-wysiwyg.js",
-      "require": "./dist/react-wysiwyg.umd.cjs"
+      "import": "./dist/react-richtext-editor.js",
+      "require": "./dist/react-richtext-editor.umd.cjs"
     }
   },
   "scripts": {

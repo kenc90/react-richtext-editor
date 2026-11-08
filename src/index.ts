@@ -1,6 +1,6 @@
 import styles from './style.css?inline';
 
-const styleId = 'react-wysiwyg-default-styles';
+const styleId = 'react-richtext-editor-default-styles';
 if (typeof document !== 'undefined' && !document.getElementById(styleId)) {
   const style = document.createElement('style');
   style.id = styleId;

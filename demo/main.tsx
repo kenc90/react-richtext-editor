@@ -80,7 +80,7 @@ function Demo() {
 
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', margin: '3rem auto', maxWidth: 960, padding: '0 1rem' }}>
-      <h1>react-wysiwyg</h1>
+      <h1>react-richtext-editor</h1>
       <div className="rwe-demo__feature-toolbar">
         <button type="button" onClick={() => setIsFeatureDialogOpen(true)}>
           Configure editor features

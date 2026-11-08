@@ -9,9 +9,9 @@ export default defineConfig({
     emptyOutDir: false,
     lib: {
       entry: resolve(projectRoot, 'src/index.ts'),
-      name: 'ReactWysiwyg',
+      name: 'ReactRichTextEditor',
       formats: ['es', 'umd'],
-      fileName: 'react-wysiwyg',
+      fileName: 'react-richtext-editor',
       cssFileName: 'style',
     },
     rollupOptions: {

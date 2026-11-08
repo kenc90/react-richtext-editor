@@ -1,13 +1,13 @@
-# react-wysiwyg
+# react-richtext-editor
 
 A lightweight WYSIWYG editor component for React.
 
-[Live demo](https://kenc90.github.io/react-wysiwyg/)
+[Live demo](https://kenc90.github.io/react-richtext-editor/)
 
 ## Install
 
 ```sh
-npm install github:kenc90/react-wysiwyg
+npm install github:kenc90/react-richtext-editor
 ```
 
 GitHub installs build the package automatically before installation.
@@ -18,7 +18,7 @@ Requires `react` and `react-dom` 18 or newer as peer dependencies.
 
 ```tsx
 import { useState } from 'react';
-import { RichTextEditor } from 'react-wysiwyg';
+import { RichTextEditor } from 'react-richtext-editor';
 
 function Example() {
   const [html, setHtml] = useState('');

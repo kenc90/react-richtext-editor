@@ -316,6 +316,157 @@ function isSimpleTable(table: HTMLTableElement) {
   ));
 }
 
+function formatHtml(html: string) {
+  const blockTags = new Set([
+    'address', 'article', 'aside', 'blockquote', 'body', 'caption', 'dd', 'details',
+    'dialog', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hr', 'html', 'li', 'main',
+    'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead',
+    'tr', 'ul',
+  ]);
+  const voidTags = new Set([
+    'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
+    'param', 'source', 'track', 'wbr',
+  ]);
+  const preserveTags = new Set(['pre', 'script', 'style', 'textarea']);
+  const tokens: Array<{
+    raw: string;
+    tagName?: string;
+    closing?: boolean;
+    block?: boolean;
+  }> = [];
+  let offset = 0;
+  let rawTextTag: string | null = null;
+
+  while (offset < html.length) {
+    if (rawTextTag) {
+      const closeIndex = html.toLowerCase().indexOf(`</${rawTextTag}`, offset);
+      const textEnd = closeIndex < 0 ? html.length : closeIndex;
+      if (textEnd > offset) tokens.push({ raw: html.slice(offset, textEnd) });
+      offset = textEnd;
+      rawTextTag = null;
+      continue;
+    }
+
+    if (html.startsWith('<!--', offset)) {
+      const commentEnd = html.indexOf('-->', offset + 4);
+      const end = commentEnd < 0 ? html.length : commentEnd + 3;
+      tokens.push({ raw: html.slice(offset, end), block: true });
+      offset = end;
+      continue;
+    }
+
+    if (html[offset] !== '<') {
+      const nextTag = html.indexOf('<', offset);
+      const end = nextTag < 0 ? html.length : nextTag;
+      tokens.push({ raw: html.slice(offset, end) });
+      offset = end;
+      continue;
+    }
+
+    let end = offset + 1;
+    let quote = '';
+    while (end < html.length) {
+      const character = html[end];
+      if (quote) {
+        if (character === quote) quote = '';
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === '>') {
+        break;
+      }
+      end += 1;
+    }
+
+    if (end === html.length) {
+      tokens.push({ raw: html.slice(offset) });
+      break;
+    }
+
+    const raw = html.slice(offset, end + 1);
+    const tagMatch = raw.match(/^<\s*(\/?)\s*([a-z][\w:-]*)\b/i);
+    if (!tagMatch) {
+      tokens.push({ raw });
+    } else {
+      const tagName = tagMatch[2].toLowerCase();
+      const closing = tagMatch[1] === '/';
+      tokens.push({ raw, tagName, closing, block: blockTags.has(tagName) });
+      if (!closing && preserveTags.has(tagName) && !raw.endsWith('/>')) {
+        rawTextTag = tagName;
+      }
+    }
+    offset = end + 1;
+  }
+
+  let result = '';
+  let depth = 0;
+  const blockStack: string[] = [];
+  const blockHasBlockChild: boolean[] = [];
+  let preservedTag: string | null = null;
+  const appendBlock = (content: string, indent: number) => {
+    result = result.replace(/[ \t]+$/, '');
+    if (result && !result.endsWith('\n')) result += '\n';
+    result += `${'  '.repeat(indent)}${content}`;
+  };
+
+  tokens.forEach((token, index) => {
+    const isPreservedClose = preservedTag !== null
+      && token.closing
+      && token.tagName === preservedTag;
+    if (preservedTag && !isPreservedClose) {
+      result += token.raw;
+      return;
+    }
+    if (isPreservedClose) preservedTag = null;
+
+    if (!token.tagName) {
+      if (token.block) {
+        appendBlock(token.raw, depth);
+        return;
+      }
+      const previousIsBlock = tokens[index - 1]?.block ?? false;
+      const nextIsBlock = tokens[index + 1]?.block ?? false;
+      if (/^\s+$/.test(token.raw) && (previousIsBlock || nextIsBlock)) return;
+      result += token.raw;
+      return;
+    }
+
+    if (token.block) {
+      if (token.closing) {
+        const stackIndex = blockStack.lastIndexOf(token.tagName);
+        if (stackIndex >= 0) {
+          const hasBlockChild = blockHasBlockChild[stackIndex];
+          blockStack.length = stackIndex;
+          blockHasBlockChild.length = stackIndex;
+          depth = stackIndex;
+          if (hasBlockChild) appendBlock(token.raw, depth);
+          else result += token.raw;
+        } else {
+          appendBlock(token.raw, depth);
+        }
+      } else {
+        if (blockHasBlockChild.length) {
+          blockHasBlockChild[blockHasBlockChild.length - 1] = true;
+        }
+        appendBlock(token.raw, depth);
+        if (!voidTags.has(token.tagName) && !token.raw.endsWith('/>')) {
+          blockStack.push(token.tagName);
+          blockHasBlockChild.push(false);
+          depth += 1;
+        }
+      }
+    } else {
+      result += token.raw;
+    }
+
+    if (!token.closing && preserveTags.has(token.tagName) && !token.raw.endsWith('/>')) {
+      preservedTag = token.tagName;
+    }
+  });
+
+  return result;
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -344,6 +495,7 @@ export function RichTextEditor({
   const [dialog, setDialog] = useState<DialogType | null>(null);
   const [dialogPosition, setDialogPosition] = useState({ top: 0, left: 0 });
   const [isSourceEditing, setIsSourceEditing] = useState(false);
+  const [htmlSourceDraft, setHtmlSourceDraft] = useState(value);
   const [isFormatPainterActive, setIsFormatPainterActive] = useState(false);
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
   const [imageFrame, setImageFrame] = useState<ImageFrame | null>(null);
@@ -454,6 +606,7 @@ export function RichTextEditor({
   };
 
   useEffect(() => {
+    setHtmlSourceDraft(value);
     const editor = editorRef.current;
     if (editor) {
       if (editor.innerHTML !== value) {
@@ -1409,6 +1562,18 @@ export function RichTextEditor({
     saveSelection();
   };
 
+  const toggleHtmlSource = () => {
+    setDialog(null);
+    setIsFormatPainterActive(false);
+    if (isSourceEditing) {
+      if (htmlSourceDraft !== value) onChange(htmlSourceDraft);
+      setIsSourceEditing(false);
+    } else {
+      setHtmlSourceDraft(formatHtml(value));
+      setIsSourceEditing(true);
+    }
+  };
+
   const button = (
     label: string,
     icon: IconName,
@@ -1679,11 +1844,7 @@ export function RichTextEditor({
           {features.htmlSource && button(
             isSourceEditing ? 'Visual editor' : 'Edit HTML',
             'code',
-            () => {
-              setDialog(null);
-              setIsFormatPainterActive(false);
-              setIsSourceEditing((current) => !current);
-            },
+            toggleHtmlSource,
           )}
         </div>
         )}
@@ -1853,8 +2014,11 @@ export function RichTextEditor({
         aria-label="HTML source"
         hidden={!isSourceEditing}
         spellCheck={false}
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        value={htmlSourceDraft}
+        onChange={(event) => {
+          setHtmlSourceDraft(event.currentTarget.value);
+          onChange(event.currentTarget.value);
+        }}
       />
       <div
         ref={editorRef}

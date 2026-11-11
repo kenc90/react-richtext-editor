@@ -1,6 +1,6 @@
 {
   "name": "@kenc90/react-richtext-editor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A lightweight WYSIWYG editor component for React",
   "license": "MIT",
   "repository": {

@@ -40,6 +40,10 @@ function Example() {
 
 `ariaLabel` is optional and defaults to `Rich text editor`; customize it to give the editable textbox an accessible name.
 
+`focused` is optional and defaults to `false`. Set it to `true` to focus the visual editor on mount or when the prop changes to `true`.
+
+`height` sets the height of the editable area and accepts a CSS height value (for example, `320` or `'20rem'`). It defaults to `'auto'`; when set to a non-auto height, the editor scrolls vertically as content exceeds the available space. `onFocus` and `onBlur` are optional focus event handlers for the visual editor.
+
 `markdownShortcuts` is optional and defaults to `false`. Set it to `true` to enable Markdown shortcuts for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) when followed by a space.
 
 `theme` accepts `system`, `light`, or `dark` and defaults to `system`, which follows the operating system's color-scheme preference. When dark mode is active, the editor's root element receives the `rwe--dark` class. Override the `--rwe-*` CSS variables or target that class to customize dark mode styles.

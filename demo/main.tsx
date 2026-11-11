@@ -72,6 +72,8 @@ function Demo() {
   const [features, setFeatures] = useState<RichTextEditorFeatures>({});
   const [markdownShortcuts, setMarkdownShortcuts] = useState(false);
   const [theme, setTheme] = useState<RichTextEditorTheme>('system');
+  const [height, setHeight] = useState('auto');
+  const [focused, setFocused] = useState(false);
   const [isFeatureDialogOpen, setIsFeatureDialogOpen] = useState(false);
   const featureDialogRef = useRef<HTMLDialogElement>(null);
   const disabledFeatureCount = Object.values(features).filter((enabled) => enabled === false).length;
@@ -99,7 +101,15 @@ function Demo() {
           />
           Markdown shortcuts
         </label>
-        <label className="rwe-demo__theme-control">
+        <label className="rwe-demo__shortcut-toggle">
+          <input
+            type="checkbox"
+            checked={focused}
+            onChange={(event) => setFocused(event.target.checked)}
+          />
+          Focus editor
+        </label>
+        <label className="rwe-demo__control">
           Editor theme
           <select
             aria-label="Editor theme"
@@ -116,6 +126,20 @@ function Demo() {
             <option value="dark">Dark</option>
           </select>
         </label>
+        <label className="rwe-demo__control">
+          Editor height
+          <select
+            aria-label="Editor height"
+            value={height}
+            onChange={(event) => setHeight(event.target.value)}
+          >
+            <option value="auto">Auto</option>
+            <option value="160px">160px</option>
+            <option value="240px">240px</option>
+            <option value="360px">360px</option>
+            <option value="480px">480px</option>
+          </select>
+        </label>
       </div>
       <RichTextEditor
         value={value}
@@ -123,6 +147,8 @@ function Demo() {
         features={features}
         markdownShortcuts={markdownShortcuts}
         theme={theme}
+        height={height}
+        focused={focused}
       />
       <dialog
         ref={featureDialogRef}

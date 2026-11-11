@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FocusEventHandler } from 'react';
 import { normalizePastedHtml } from './paste';
 
 export interface RichTextEditorProps {
@@ -10,6 +10,10 @@ export interface RichTextEditorProps {
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
+  focused?: boolean;
+  height?: CSSProperties['height'];
+  onFocus?: FocusEventHandler<HTMLDivElement>;
+  onBlur?: FocusEventHandler<HTMLDivElement>;
 }
 
 export type RichTextEditorTheme = 'system' | 'light' | 'dark';
@@ -479,6 +483,10 @@ export function RichTextEditor({
   placeholder,
   ariaLabel = 'Rich text editor',
   className,
+  focused = false,
+  height = 'auto',
+  onFocus,
+  onBlur,
 }: RichTextEditorProps) {
   const features = { ...defaultFeatures, ...featureOverrides };
   const editorRef = useRef<HTMLDivElement>(null);
@@ -519,6 +527,10 @@ export function RichTextEditor({
   const [tableRows, setTableRows] = useState('3');
   const [tableColumns, setTableColumns] = useState('3');
   const isDarkTheme = theme === 'dark' || (theme === 'system' && systemPrefersDark);
+
+  useEffect(() => {
+    if (focused) editorRef.current?.focus();
+  }, [focused]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -2036,6 +2048,12 @@ export function RichTextEditor({
         aria-label="HTML source"
         hidden={!isSourceEditing}
         spellCheck={false}
+        style={{
+          height,
+          minHeight: height === 'auto' ? undefined : 0,
+          overflowY: height === 'auto' ? 'visible' : 'auto',
+          resize: height === 'auto' ? 'vertical' : 'none',
+        }}
         value={htmlSourceDraft}
         onChange={(event) => {
           setHtmlSourceDraft(event.currentTarget.value);
@@ -2052,6 +2070,12 @@ export function RichTextEditor({
         aria-label={ariaLabel}
         aria-multiline="true"
         data-placeholder={placeholder}
+        style={{
+          height,
+          minHeight: height === 'auto' ? undefined : 0,
+          overflowY: height === 'auto' ? 'visible' : 'auto',
+        }}
+        onFocus={onFocus}
         onInput={handleEditorInput}
         onKeyDown={handleKeyDown}
         onKeyUp={handleEditorSelection}
@@ -2066,6 +2090,7 @@ export function RichTextEditor({
           if (!columnResizeRef.current) event.currentTarget.style.cursor = '';
         }}
         onBlur={(event) => {
+          onBlur?.(event);
           const nextTarget = event.relatedTarget;
           if (!(nextTarget instanceof Node && event.currentTarget.parentElement?.contains(nextTarget))) {
             clearPendingInlineStyle();

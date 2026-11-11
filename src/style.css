@@ -55,6 +55,14 @@
   color-scheme: dark;
 }
 
+.rwe--custom-theme {
+  --rwe-accent: var(--rwe-theme-color);
+  --rwe-focus: var(--rwe-theme-color);
+  --rwe-hover-background: color-mix(in srgb, var(--rwe-theme-color) 12%, var(--rwe-toolbar-background));
+  --rwe-pressed-background: color-mix(in srgb, var(--rwe-theme-color) 20%, var(--rwe-control-background));
+  --rwe-pressed-text: var(--rwe-theme-color);
+}
+
 .rwe__toolbar {
   background: var(--rwe-toolbar-background);
   border-bottom: 1px solid var(--rwe-toolbar-border);

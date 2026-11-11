@@ -72,6 +72,7 @@ function Demo() {
   const [features, setFeatures] = useState<RichTextEditorFeatures>({});
   const [markdownShortcuts, setMarkdownShortcuts] = useState(false);
   const [theme, setTheme] = useState<RichTextEditorTheme>('system');
+  const [themeColor, setThemeColor] = useState('#2563eb');
   const [height, setHeight] = useState('auto');
   const [focused, setFocused] = useState(false);
   const [isFeatureDialogOpen, setIsFeatureDialogOpen] = useState(false);
@@ -127,6 +128,15 @@ function Demo() {
           </select>
         </label>
         <label className="rwe-demo__control">
+          Theme color
+          <input
+            type="color"
+            aria-label="Editor theme color"
+            value={themeColor}
+            onChange={(event) => setThemeColor(event.target.value)}
+          />
+        </label>
+        <label className="rwe-demo__control">
           Editor height
           <select
             aria-label="Editor height"
@@ -147,6 +157,7 @@ function Demo() {
         features={features}
         markdownShortcuts={markdownShortcuts}
         theme={theme}
+        themeColor={themeColor}
         height={height}
         focused={focused}
       />

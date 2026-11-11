@@ -31,6 +31,7 @@ function Example() {
       ariaLabel="Article body editor"
       markdownShortcuts
       theme="system"
+      themeColor="#7c3aed"
     />
   );
 }
@@ -47,6 +48,8 @@ function Example() {
 `markdownShortcuts` is optional and defaults to `false`. Set it to `true` to enable Markdown shortcuts for headings (`#` through `###`), blockquotes (`>`), bulleted lists (`-`), and numbered lists (`1.`) when followed by a space.
 
 `theme` accepts `system`, `light`, or `dark` and defaults to `system`, which follows the operating system's color-scheme preference. When dark mode is active, the editor's root element receives the `rwe--dark` class. Override the `--rwe-*` CSS variables or target that class to customize dark mode styles.
+
+`themeColor` accepts any CSS color value and defaults to the editor's blue accent. It changes the accent, focus ring, toolbar button hover and pressed colors, and other accent details in both light and dark themes.
 
 ## Choosing features
 

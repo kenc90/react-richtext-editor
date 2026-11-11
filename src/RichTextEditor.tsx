@@ -7,6 +7,7 @@ export interface RichTextEditorProps {
   features?: RichTextEditorFeatures;
   markdownShortcuts?: boolean;
   theme?: RichTextEditorTheme;
+  themeColor?: string;
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
@@ -480,6 +481,7 @@ export function RichTextEditor({
   features: featureOverrides,
   markdownShortcuts = false,
   theme = 'system',
+  themeColor,
   placeholder,
   ariaLabel = 'Rich text editor',
   className,
@@ -1649,7 +1651,12 @@ export function RichTextEditor({
   ));
 
   return (
-    <div className={['rwe', isDarkTheme && 'rwe--dark', className].filter(Boolean).join(' ')}>
+    <div
+      className={['rwe', isDarkTheme && 'rwe--dark', themeColor && 'rwe--custom-theme', className]
+        .filter(Boolean)
+        .join(' ')}
+      style={themeColor ? { '--rwe-theme-color': themeColor } as CSSProperties : undefined}
+    >
       <div className="rwe__toolbar" role="toolbar" aria-label="Text formatting">
         {features.blockFormat && (
         <div className="rwe__group">
